@@ -2,6 +2,7 @@ import numpy as np
 
 
 class Struc:
+    """Defines the structure of the generation and pedigree class objects"""
     dtype = np.float32
     n_cols = 11
     sex = 0
@@ -67,6 +68,12 @@ class Const:
                      "A = 2 B = H",
                      "A = 2 B = 2"
                      ]
-    allele_manifold = np.array([[[2, 0], [2, 0]], [[2, 0], [1, 1]], [[2, 0],
-            [0, 2]], [[1, 1], [2, 0]], [[1, 1], [1, 1]], [[1, 1], [0, 2]],
-            [[0, 2], [2, 0]], [[0, 2], [1, 1]], [[0, 2], [0, 2]]])
+    allele_manifold = np.array([[[2, 0], [2, 0]],
+                                [[2, 0], [1, 1]],
+                                [[2, 0], [0, 2]],
+                                [[1, 1], [2, 0]],
+                                [[1, 1], [1, 1]],
+                                [[1, 1], [0, 2]],
+                                [[0, 2], [2, 0]],
+                                [[0, 2], [1, 1]],
+                                [[0, 2], [0, 2]]])

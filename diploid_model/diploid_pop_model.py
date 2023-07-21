@@ -6,6 +6,12 @@ import matplotlib.pyplot as plt
 
 import parameters
 
+import mating_models
+
+import dispersal_models
+
+import fitness_models
+
 from constants import Struc, Const
 
 plt.rcParams['figure.dpi'] = 100
@@ -81,9 +87,11 @@ class Generation:
         return cls(N, x, t, parent_ids, alleles, params)
 
     @classmethod
-    def get_migrants(cls):
-        # todo
-        pass
+    def get_migrants(cls, x, species, t, params):
+        N = len(x)
+        parent_ids = np.full((N, 2), -1)
+        alleles = np.full((N, Struc.n_alleles), species)
+        return cls(N, x, t, parent_ids, alleles, params)
 
     def precompute(self):
         """Compute a set of useful vectors, arrays etc once a generation
@@ -146,54 +154,91 @@ class Generation:
             pref_matrix[:, i] = params.c_matrix[trait_vec, i]
         return pref_matrix
 
+    @staticmethod
+    def interpret_dispersal_model(params):
+        if params.dispersal_model == "random":
+            fxn = dispersal_models.random_dispersal
+        elif params.dispersal_model == "scale":
+            fxn = dispersal_models.scale_dispersal
+        elif params.dispersal_model == "shift":
+            fxn = dispersal_models.shift_dispersal
+        else:
+            print("invalid dispersal model")
+            fxn = None
+        return fxn
+
     def disperse(self, params):
-        dispersal_fxn = eval(params.dispersal_fxn)
-        delta = dispersal_fxn(self, params)
-        edge_fxn = eval(params.edge_fxn)
-        delta = edge_fxn(self, delta, params)
+        fxn = self.interpret_dispersal_model(params)
+        delta = fxn(self, params)
+        if params.edge_model == "closed":
+            self.closed(delta)
+        elif params.edge_model == "flux":
+            self.flux(delta, params)
+        elif params.edge_model == "ring":
+            self.ring(delta)
+        else:
+            print("invalid edge model")
         self.arr[:, Struc.x] += delta
 
-    def compute_signal_prop(self, limits):
-        """Compute the proportion of same-signal males within a spatial limit for
-        each male in a generation.
+    def closed(self, delta):
+        """Set the displacement of any individual who would exit the space when
+        displacements are applied to 0, freezing them in place
         """
-        M = self.get_M()
-        m_idx = self.get_m_idx()
-        bounds = self.compute_sex_bounds(1, 1, limits)
-        if limits[0] != 0 and limits[1] != 0:
-            self_counting = True
-        else:
-            self_counting = False
-        N_vec = bounds[:, 1] - bounds[:, 0]
-        if self_counting == True:
-            N_vec -= 1
-        signal_sums = np.sum(self.arr[np.ix_(m_idx, Struc.A_loci)], axis=1)
-        A1A1_idx = np.where(signal_sums == 2)[0]
-        A1A2_idx = np.where(signal_sums == 3)[0]
-        A2A2_idx = np.where(signal_sums == 4)[0]
-        signal_prop = np.zeros(M, dtype=np.float32)
-        signal_prop[A1A1_idx] = (
-                    np.searchsorted(A1A1_idx, bounds[A1A1_idx, 1]) -
-                    np.searchsorted(A1A1_idx, bounds[A1A1_idx, 0]))
-        signal_prop[A2A2_idx] = (
-                    np.searchsorted(A2A2_idx, bounds[A2A2_idx, 1]) -
-                    np.searchsorted(A2A2_idx, bounds[A2A2_idx, 0]))
-        if self_counting == True:
-            signal_prop -= 1
-        signal_prop /= N_vec
-        signal_prop[np.isnan(signal_prop)] = 1
-        return signal_prop, A1A2_idx
+        positions = delta + self.get_x()
+        delta[positions < 0] = 0
+        delta[positions > 1] = 0
+        self.arr[:, Struc.x] += delta
+
+    def flux(self, delta, params):
+        self.arr[:, Struc.x] += delta
+        t = self.t
+        exits = self.detect_exits()
+        self.set_flags(exits, -3)
+        left_x = dispersal_models.draw_migrants(params)
+        left_migrants, runlog = Generation.get_migrants(left_x, 1, t, params)
+        right_x = 1 - dispersal_models.draw_migrants(params)
+        right_migrants, runlog = Generation.get_migrants(right_x, 2, t, params)
+        migrants = Generation.merge(left_migrants, right_migrants)
+        self = Generation.merge(self, migrants)
+        # no idea if this works
+
+    def ring(self, delta):
+        """An experimental edge function where individuals who exit the space
+        are deposited onto the other side of space, creating a closed loop
+        """
+        self.arr[:, Struc.x] += delta
+        self.arr[self.detect_l_exits(), Struc.x] += 1
+        self.arr[self.detect_r_exits(), Struc.x] -= 1
+
+    def detect_l_exits(self):
+        """Return an index of left exits"""
+        return np.where(self.arr[:, Struc.x] < 0)[0]
+
+    def detect_r_exits(self):
+        """Return an index of right exits"""
+        return np.where(self.arr[:, Struc.x] > 1)[0]
+
+    def detect_exits(self):
+        """Return the indices of individuals with invalid x coordinates outside
+        [0, 1]
+        """
+        return np.concatenate((self.detect_l_exits(), self.detect_l_exits))
 
     def fitness(self, params):
-        pass
+        if params.intrinsic_fitness:
+            fitness_models.intrinsic_fitness(self, params)
+        if params.extrinsic_fitness:
+            fitness_models.extrinsic_fitness(self, params)
 
-    def remove_dead(self):
-        pass
+    def set_flags(self, idx, x):
+        """Flag individuals at index idx with flag x"""
+        self.arr[idx, Struc.flag] = x
 
-    def compute_bounds(self, seekingsex, targetsex, limits):
+    @staticmethod
+    def compute_bounds(seeking_sex, target_sex, limits):
         """Compute bounds, given two arrays as arguments"""
-        x_0 = seekingsex[:, Struc.x]
-        x_1 = targetsex[:, Struc.x]
+        x_0 = seeking_sex[:, Struc.x]
+        x_1 = target_sex[:, Struc.x]
         l_bound = np.searchsorted(a = x_1, v = x_0 + limits[0])
         r_bound = np.searchsorted(a = x_1, v = x_0 + limits[1])
         bounds = np.column_stack((l_bound, r_bound))
@@ -209,6 +254,58 @@ class Generation:
         r_bound = np.searchsorted(a = x_1, v = x_0 + limits[1])
         bounds = np.column_stack((l_bound, r_bound))
         return bounds
+
+    def get_signal_props(self, limits):
+        """Compute the proportion of same-signal males within a spatial limit
+        for each male in a generation.
+
+        Used to adjust the direction or scale of male dispersal under nonrandom
+        dispersal models.
+        """
+        bounds = self.compute_sex_bounds(1, 1, limits)
+        if limits[0] != 0 and limits[1] != 0:
+            self_counting = True
+        else:
+            self_counting = False
+        n = bounds[:, 1] - bounds[:, 0]
+        if self_counting:
+            n -= 1
+        idx11, idx12, idx22 = self.get_male_signal_indices()
+        signal_props = np.zeros(self.get_M(), dtype = np.float32)
+        signal_props[idx11] = (
+                np.searchsorted(idx11, bounds[idx11, 1])
+              - np.searchsorted(idx11, bounds[idx11, 0]))
+        signal_props[idx22] = (
+                np.searchsorted(idx22, bounds[idx22, 1])
+              - np.searchsorted(idx22, bounds[idx22, 0]))
+        if self_counting:
+            signal_props -= 1
+        signal_props /= n
+        signal_props[np.isnan(signal_props)] = 1
+        return signal_props, idx12
+
+    def get_male_signal_sums(self):
+        """Return the sum of signal alleles for males only"""
+        males = self.get_males()
+        return np.sum(males[:, Struc.A_loci], axis = 1)
+
+    def get_male_signal_indices(self):
+        signal_sums = self.get_male_signal_sums()
+        idx11 = np.where(signal_sums == 2)[0]
+        idx12 = np.where(signal_sums == 3)[0]
+        idx22 = np.where(signal_sums == 4)[0]
+        return idx11, idx12, idx22
+
+    def get_signal_sums(self):
+        """Return the sum of signal alleles for all individuals"""
+        return np.sum(self.arr[:, Struc.A_loci], axis = 1)
+
+    def get_signal_indices(self):
+        signal_sums = self.get_signal_sums()
+        idx11 = np.where(signal_sums == 2)[0]
+        idx12 = np.where(signal_sums == 3)[0]
+        idx22 = np.where(signal_sums == 4)[0]
+        return idx11, idx12, idx22
 
     def get_sex_indices(self):
         """Return the indices of females and of males in a generation
@@ -282,15 +379,24 @@ class Generation:
         return females, males
 
     def sort(self):
+        """Sort the generation by x coordinate. Sorting is vital to the
+        correct operation of many Generation functions
+        """
         x = self.get_x()
-        # more efficient to create new arr?
         self.arr = self.arr[x.argsort()]
 
-    def sort_and_index(self, i0):
-        N = self.get_N()
+    def sort_and_id(self, i0):
+        """Sort the generation by x coordinate and enter the id column, where
+        each element matches the index of its row. This may seem redundant
+        but it is convenient for sampling sub-pedigrees. i1 is return to the
+        Trial object to keep track of the index
+        """
         self.sort()
-        ids = np.arange(N) + i0
+        N = self.get_N()
+        i1 = i0 + N
+        ids = np.arange(i0, i1)
         self.arr[:, Struc.i] = ids
+        return i1
 
     def get_allele_sums(self):
         allele_sums = np.zeros((self.N, 2))
@@ -310,11 +416,22 @@ class Generation:
 
     def get_living(self):
         """Return the index of living organisms with flag = 1"""
-        return np.where(self.arr[:, Struc.flag] == 1)[0].astype(np.int32)
+        return np.where(self.arr[:, Struc.flag] == 1)[0]
 
     def senescence(self):
         self.flag = 0
         self.arr[self.get_living(), Struc.flag] = 0
+
+    def get_dead_idx(self):
+        """Get the index of individuals with flag < 0"""
+        return np.where(self.arr[:, Struc.flag] < 0)[0]
+
+    def remove_dead(self):
+        """Delete individuals with flag != 1 or 0. Counterintuitively,
+        individuals with flag = 0 are retained; this is because of the order
+        in which functions ar currently executed in the main loop
+        """
+        self.arr = np.delete(self.arr, self.get_dead_idx(), axis=0)
 
     def plot_subpops(self):
         gen_subpop_arr = GenSubpopArr(self)
@@ -329,6 +446,8 @@ class MatingPairs:
     character_axis = 2
 
     def __init__(self, generation, params):
+        self.N = None
+        self.arr = None
         self.pair_ids = self.compute_pair_ids(generation, params)
         self.get_mating_pairs(generation)
 
@@ -337,8 +456,20 @@ class MatingPairs:
         mating_pair_ids = np.zeros((self.N, 2), dtype = np.int32)
         return mating_pair_ids
 
+    @staticmethod
+    def interpret_mating_fxn(params):
+        if params.mating_model == "gaussian":
+            fxn = mating_models.gaussian
+        elif params.mating_model == "uniform":
+            fxn = mating_models.uniform
+        elif params.mating_model == "unbounded":
+            fxn = mating_models.unbounded
+        else:
+            print("invalid mating function")
+        return fxn
+
     def compute_pair_ids(self, generation, params):
-        func = eval(params.mating_fxn)
+        fxn = self.interpret_mating_fxn(params)
         m_x_vec = generation.get_m_x()
         f_x_vec = generation.get_f_x()
         pref_matrix = generation.compute_pref_matrix(params)
@@ -352,7 +483,7 @@ class MatingPairs:
         for f_id in np.arange(F):
             if n_offspring[f_id] > 0:
                 x = f_x_vec[f_id]
-                m_id = func(x, m_x_vec, pref_matrix[:, pref_vec_idx[f_id]],
+                m_id = fxn(x, m_x_vec, pref_matrix[:, pref_vec_idx[f_id]],
                     bounds[f_id], params)
                 mating_pair_ids[i:i + n_offspring[f_id]] = [f_id, m_id]
                 i += n_offspring[f_id]
@@ -405,8 +536,6 @@ class Pedigree:
         self.g = params.g
         self.t = params.g
         self.K = params.K
-        self.i0 = 0
-        self.i1 = 0
         if max: self.max = max
 
     @classmethod
@@ -418,16 +547,14 @@ class Pedigree:
     def load(self, filename):
         pass
 
-    def enter_gen(self, generation):
-        self.i1 += generation.get_N()
-        if self.i1 > self.max:
+    def enter_gen(self, generation, i0, i1):
+        if i1 > self.max:
             self.expand()
-        self.insert_gen(generation)
+        self.insert_gen(generation, i0, i1)
         self.t = generation.t
 
-    def insert_gen(self, generation):
-        self.arr[self.i0:self.i1, :] = generation.arr
-        self.i0 = self.i1
+    def insert_gen(self, generation, i0, i1):
+        self.arr[i0:i1, :] = generation.arr
 
     def expand(self):
         """expand the pedigree to accommodate more organisms"""
@@ -440,10 +567,10 @@ class Pedigree:
         print("pedigree arr expanded " + str(new_max)
               + " rows at est. utilization " + str(avg_util))
 
-    def trim(self):
+    def trim(self, i1):
         """trim the pop array of unfilled rows"""
-        self.arr = self.arr[:self.i1]
-        excess = self.max - self.i1
+        self.arr = self.arr[:i1]
+        excess = self.max - i1
         frac = np.round((1 - excess / self.max) * 100, 2)
         print("pedigree trimmed of " + str(excess) + " excess rows, "
               + str(frac) + "% utilization")
@@ -493,10 +620,11 @@ class AbbrevPedigree:
     organism_axis = 0
     character_axis = 1
     dtype = np.int32
-    n_cols = 3
+    n_cols = 4
     t = 0
     mat_id = 1
     pat_id = 2
+    subpop_code = 4
     map = np.array([3, 4, 5])
 
     def __init__(self, arr, params, max = None):
@@ -505,11 +633,10 @@ class AbbrevPedigree:
         self.g = params.g
         self.t = params.g
         self.K = params.K
-        self.i0 = 0
-        self.i1 = 0
         self.founding_gen = None
         self.last_gen = None
-        if max: self.max = max
+        if max:
+            self.max = max
 
     @classmethod
     def new(cls, params):
@@ -525,23 +652,15 @@ class AbbrevPedigree:
         """Save the founding generation so that the initial state is known"""
         self.founding_gen = generation
 
-    def enter_gen(self, generation):
-        self.i1 += generation.get_N()
-        if self.i1 > self.max:
+    def enter_gen(self, generation, i0, i1):
+        if i1 > self.max:
             self.expand()
-        self.insert_gen(generation)
+        self.insert_gen(generation, i0, i1)
         self.t = generation.t
 
-    def enter_gen(self, generation):
-        self.i1 += generation.get_N()
-        if self.i1 > self.max:
-            self.expand()
-        self.insert_gen(generation)
-        self.t = generation.t
-
-    def insert_gen(self, generation):
-        self.arr[self.i0:self.i1, :] = generation.arr[:, map]
-        self.i0 = self.i1
+    def insert_gen(self, generation, i0, i1):
+        self.arr[i0:i1, :3] = generation.arr[:, self.map]
+        self.arr[i0:i1, 3] = generation.get_subpop_idx()
 
     def expand(self):
         """expand the pedigree to accommodate more organisms"""
@@ -558,10 +677,10 @@ class AbbrevPedigree:
         """Save the final gen, so that spatial sampling etc. is possible"""
         self.last_gen = generation
 
-    def trim(self):
+    def trim(self, i1):
         """trim the pop array of unfilled rows"""
-        self.arr = self.arr[:self.i1]
-        excess = self.max - self.i1
+        self.arr = self.arr[:i1]
+        excess = self.max - i1
         frac = np.round((1 - excess / self.max) * 100, 2)
         print("pedigree trimmed of " + str(excess) + " excess rows, "
               + str(frac) + "% utilization")
@@ -572,67 +691,69 @@ class Trial:
     def __init__(self, params, plot_int=None):
         self.time0 = time.time()
         self.t = params.g
+        self.i0 = 0
+        self.i1 = 0
         self.complete = False
         self.params = params
         self.time_vec = np.zeros(params.g + 1)
         self.report_int = max(min(100, self.params.g // 10), 1)
         self.plot_int = plot_int
         self.figs = []
-        if params.history_type == "Pedigree":
+        self.type = params.history_type
+        if self.type == "Pedigree":
             self.pedigree = Pedigree.new(params)
             self.get_pedigree()
-        elif params.history_type == "AbbrevPedigree":
+        elif self.type == "AbbrevPedigree":
             self.abbrev_pedigree = AbbrevPedigree.new(params)
             self.get_abbrev_pedigree()
-        elif params.history_type == "SubpopArr":
+        elif self.type == "SubpopArr":
             self.subpop_arr = SubpopArr.new()
             self.get_subpop_arr()
 
     def get_pedigree(self):
-        print("simulation initiated @ " + get_time_string())
+        print("simulation initiated @ " + self.get_time_string())
         generation = Generation.get_founding(params)
-        generation.sort_and_index(self.pedigree.i0)
+        i1 = generation.sort_and_id(self.i0)
+        self.update_i(i1)
+        generation.senescence()
+        self.pedigree.enter_gen(generation, self.i0, self.i1)
         self.time_vec[self.params.g] = 0
         if self.plot_int:
             self.figs.append(generation.plot_subpops())
         while self.t > 0:
             generation.senescence()
-            self.pedigree.enter_gen(generation)
             generation = self.cycle(generation)
-            if self.t == 0:
-                self.complete = True
-        self.pedigree.enter_gen(generation)
-        self.pedigree.trim()
+            self.pedigree.enter_gen(generation, self.i0, self.i1)
+        self.pedigree.trim(self.i1)
         if self.plot_int:
-            for fig in figs:
+            for fig in self.figs:
                 fig.show()
         print("simulation complete")
 
     def get_abbrev_pedigree(self):
-        print("simulation initiated @ " + get_time_string())
+        print("simulation initiated @ " + self.get_time_string())
         generation = Generation.get_founding(params)
-        generation.sort_and_index(self.abbrev_pedigree.i0)
+        i1 = generation.sort_and_id(self.i0)
+        self.update_i(i1)
+        self.abbrev_pedigree.enter_gen(generation, self.i0, self.i1)
         self.abbrev_pedigree.save_first_gen(generation)
         self.time_vec[self.params.g] = 0
         if self.plot_int:
             self.figs.append(generation.plot_subpops())
         while self.t > 0:
-            self.abbrev_pedigree.enter_gen(generation)
             generation = self.cycle(generation)
-            if self.t == 0:
-                self.complete = True
+            self.abbrev_pedigree.enter_gen(generation, self.i0, self.i1)
         self.abbrev_pedigree.save_last_gen(generation)
-        self.abbrev_pedigree.enter_gen(generation)
-        self.abbrev_pedigree.trim()
+        self.abbrev_pedigree.trim(self.i1)
         if self.plot_int:
             for fig in self.figs:
                 fig.show()
         print("simulation complete")
 
     def get_subpop_arr(self):
-        print("simulation initiated @ " + get_time_string())
+        print("simulation initiated @ " + self.get_time_string())
         generation = Generation.get_founding(params)
-        generation.sort_and_index(self.pedigree.i0)
+        generation.sort_and_id(self.i0)
         self.time_vec[self.params.g] = 0
         if self.plot_int:
             self.figs.append(generation.plot_subpops())
@@ -648,18 +769,29 @@ class Trial:
         print("simulation complete")
 
     def cycle(self, generation):
-        generation.remove_dead()
+        self.update_t()
         old_generation = generation
+        old_generation.remove_dead()
         generation = old_generation.mate(old_generation, self.params)
         generation.disperse(self.params)
         generation.fitness(self.params)
-        generation.sort_and_index(self.pedigree.i0)
-        self.t -= 1
+        i1 = generation.sort_and_id(self.i1)
+        self.update_i(i1)
         self.report()
         if self.plot_int:
             if self.t % self.plot_int == 0:
                 self.figs.append(generation.plot_subpops())
         return generation
+
+    def update_i(self, i1):
+        """Update the upper and lower indices to appropriate new values"""
+        self.i0 = self.i1
+        self.i1 = i1
+
+    def update_t(self):
+        self.t -= 1
+        if self.t == 0:
+            self.complete = True
 
     def report(self):
         self.time_vec[self.t] = time.time() - self.time0
@@ -668,198 +800,14 @@ class Trial:
             t_last = self.time_vec[self.t + self.report_int]
             mean_t = str(np.round((t - t_last) / self.report_int, 3))
             run_t = str(np.round(self.time_vec[self.t], 2))
-            time_string = get_time_string()
+            time_string = self.get_time_string()
             print(f"g{self.t : > 6} complete, runtime = {run_t : >8}"
                   + f" s, averaging {mean_t : >8} s/gen, @ {time_string :>8}")
 
+    @staticmethod
+    def get_time_string():
+        return str(time.strftime("%H:%M:%S", time.localtime()))
 
-def plot_ancestry():
-    fig = plt.figure(figsize=space_plotsize)
-    sub = fig.add_subplot(111)
-    x = pedigree[thisgen, PedStruc.Col.x]
-    sub.plot(x, ancs, color="black", linewidth=2)
-    sub.set_xlim(-0.01, 1.01), sub.set_ylim(-0.01, 1.01)
-    plt.xticks(np.arange(0, 1.1, 0.1))
-    plt.title("Ancestry coefficients after " + str(int(G -g)) + " generations")
-
-def setup_space_plot(sub, ymax, ylabel, title):
-    sub.set_xticks(np.arange(0, 1.1, 0.1))
-    sub.set_xlabel("x coordinate")
-    sub.set_ylabel(ylabel)
-    sub.set_ylim(-0.01, ymax)
-    sub.set_xlim(-0.01, 1.01)
-    sub.set_title(title)
-    return (sub)
-
-
-def gaussian_mating(x, m_x_vec, pref_vec, bound, params):
-    """A mating model where each female's chance to mate with a given male is
-    weighted normally by distance and by the female's signal preference.
-    """
-    d_vec = x - m_x_vec[bound[0]:bound[1]]
-    p_vec = compute_pd(d_vec, params.beta)
-    p_vec *= pref_vec[bound[0]:bound[1]]
-    S = np.sum(p_vec)
-    if S > 0:
-        p_vec /= S
-        cd = np.cumsum(p_vec)
-        X = np.random.uniform()
-        m_id = np.searchsorted(cd, X) + bound[0]
-    else:
-        m_id = -1
-    return m_id
-
-
-def uniform_mating(x, m_x_vec, pref_vec, bound, params):
-    """A mating function where females pick a mate assortatively"""
-    if bound[1] - bound[0] > 0:
-        p_vec = np.cumsum(pref_vec[bound[0]:bound[1]])
-        S = np.sum(p_vec)
-        p_vec /= S
-        cd = np.cumsum(p_vec)
-        X = np.random.uniform()
-        m_id = np.searchsorted(cd, X) + bound[0]
-    else:
-        m_id = -1
-    return (m_id)
-
-
-def unbounded_mating(x, m_x_vec, pref_vec, bound, params):
-    """A mating function where females pick a mate randomly with
-    assortation
-    """
-    d_vec = x - m_x_vec
-    p_vec = compute_pd(d_vec, params.beta)
-    p_vec *= pref_vec
-    S = np.sum(p_vec)
-    if S > 0:
-        p_vec /= S
-        cd = np.cumsum(p_vec)
-        X = np.random.uniform()
-        m_id = np.searchsorted(cd, X)
-    else:
-        m_id = -1
-    return (m_id)
-
-
-def compute_pd(x, s):
-    """Compute a vector of probability density values for a normal distribution
-    with standard deviation s, mean 0.
-    """
-    return 1 / (s * np.sqrt(2 * np.pi)) * np.exp(-0.5 * np.square(x / s))
-
-
-def random_dispersal(generation, params):
-    """Draw a set of displacements for the generation from a normal
-    distribution with mean 0 and standard deviation delta.
-    """
-    N = generation.get_N()
-    return np.random.normal(loc=0, scale=params.delta, size=N)
-
-
-def scale_dispersal(gen, params, runlog):
-    """Get a vector of dispersals using the scale model.
-
-    Females sample dispersals from normal distributions with std params.delta.
-    Males check the signal
-    """
-    N = get_N(gen)
-    F = get_F(gen)
-    M = get_M(gen)
-    f_idx, m_idx = get_sex_indices(gen)
-    males = get_males(gen)
-    delta_x = np.zeros(N, dtype=np.float32)
-    delta_x[f_idx] = np.random.normal(
-        loc=0.0, scale=params.delta, size=F)
-    prop, A1A2_idx = compute_signal_prop(males, [-params.bound, params.bound])
-    std = scale_func(prop, params)
-    std[A1A2_idx] = params.delta
-    delta_x[m_idx] = np.random.normal(loc=0, scale=std, size=M)
-    return (delta_x)
-
-
-def scale_func(prop, params):
-    """Compute standard deviations for male dispersals. Used by the
-    scale_dispersal dispersal model.
-
-    Arguments
-    ------------
-    prop : np array
-        the vector of signal proportions. scale is a function of this vector
-
-    params : Params class instance
-
-    Returns
-    ------------
-    scale : np array
-        the vector of male dispersal standard deviations
-    """
-    max_scale = params.d_scale
-    scale = (1 - max_scale) * prop + max_scale
-    scale *= params.delta
-    return (scale)
-
-
-def shift_dispersal(gen, params, runlog):
-    """Get a vector of dispersals using the shift model.
-
-    Females sample dispersals from normal distributions with std params.delta.
-    Males check the signal
-    """
-    N = get_N(gen)
-    F = get_F(gen)
-    M = get_M(gen)
-    f_idx, m_idx = get_sex_indices(gen)
-    males = get_males(gen)
-    delta_x = np.zeros(N, dtype=np.float32)
-    delta_x[f_idx] = np.random.normal(
-        loc=0.0, scale=params.delta, size=F
-    )
-    l_prop, A1A2_idx = compute_signal_prop(males, [-params.bound, 0])
-    r_prop, A1A2_idx = compute_signal_prop(males, [0, params.bound])
-    locs = loc_func(l_prop, r_prop, params)
-    locs[A1A2_idx] = 0
-    delta_x[m_idx] = np.random.normal(loc=locs, scale=params.delta, size=M)
-    return (delta_x)
-
-
-def loc_func(l_prop, r_prop, params):
-    """
-
-    Arguments
-    ------------
-    l_prop : TYPE
-        DESCRIPTION.
-    r_prop : TYPE
-        DESCRIPTION.
-    params : TYPE
-        DESCRIPTION.
-
-    Returns
-    ------------
-    None.
-
-    """
-    # nan errors
-    m = params.d_scale  # slope
-    dif = r_prop - l_prop
-    loc = dif * m
-    loc *= params.delta
-    return (loc)
-
-
-def static_reflect(generation, delta, params):
-    """Set the displacement of any individual who would exit the space when
-    displacements are applied to 0, freezing them in place
-    """
-    positions = delta + generation.get_x()
-    delta[positions < 0] = 0
-    delta[positions > 1] = 0
-    return delta
-
-
-def get_time_string():
-    return str(time.strftime("%H:%M:%S", time.localtime()))
 
 class GenSubpopArr:
     space_axis = 0
@@ -913,10 +861,12 @@ class SubpopArr:
         self.arr = arr
         self.params = params
         self.t_vec = np.arange(np.shape(arr)[0])
+        self.g = params.g
 
     @classmethod
     def new(cls, params):
-        arr = np.zeros((t_len, Const.n_bins, Const.n_subpops), dtype=np.int32)
+        length = params.g + 1
+        arr = np.zeros((length, Const.n_bins, Const.n_subpops), dtype=np.int32)
         return cls(arr, params)
 
     @classmethod
@@ -1004,17 +954,25 @@ class AlleleArr:
         return cls(arr)
 
 
+def setup_space_plot(sub, ymax, ylabel, title):
+    sub.set_xticks(np.arange(0, 1.1, 0.1))
+    sub.set_xlabel("x coordinate")
+    sub.set_ylabel(ylabel)
+    sub.set_ylim(-0.01, ymax)
+    sub.set_xlim(-0.01, 1.01)
+    sub.set_title(title)
+    return sub
+
+
+def plot_ancestry(pedigree):
+    fig = plt.figure(figsize=Const.plot_size)
+    sub = fig.add_subplot(111)
+    x = pedigree[thisgen, PedStruc.Col.x]
+    sub.plot(x, ancs, color="black", linewidth=2)
+    sub.set_xlim(-0.01, 1.01), sub.set_ylim(-0.01, 1.01)
+    plt.xticks(np.arange(0, 1.1, 0.1))
+    plt.title("Ancestry coefficients after " + str(int(G -g)) + " generations")
+
+
 params = parameters.Params(10000, 10, 0.1)
 gen = Generation.get_founding(params)
-
-"""
-import cProfile
-
-
-pr = cProfile.Profile()
-pr.enable()
-x = Trial(params)
-pr.disable()
-# after your program ends
-pr.print_stats(sort="calls")
-"""

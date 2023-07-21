@@ -65,22 +65,15 @@ class Params:
             "gaussian_mating"
 
     delta : float
-        the stdev of individual dispersal, given that dispersal is random.
+        the st dev of individual dispersal, given that dispersal is random.
 
     dispersal_fxn : str
-        the model of dispersal. options:
-            "scale_dispersal"
-            "shift_dispersal"
-            "random_dispersal"
+        the model of dispersal: "scale" "shift" "random"
 
     edge_fxn : str
         the model used to handle interactions at the edges of space, eg what
         occurs if an individuals' dispersal removes it from the bound [0, 1]
-            "truncated_redraw"
-            "static_reflect"
-            "dynamic_reflect"
-            "exp_dynamic_reflect"
-            "flux"
+            "closed" "flux"
 
     d_scale : float
         the scale applied to the dispersal effects in the scale and shift
@@ -187,16 +180,16 @@ class Params:
         self.g = g
 
         # mating parameters
-        self.pref_model = "semiundesirable"
+        self.pref_model = "undesirable"
         self.set_c(c, self.pref_model)
         self.beta = 0.005
         self.bound = self.beta * 4
-        self.mating_fxn = "gaussian_mating"
+        self.mating_model = "gaussian"
 
         # dispersal parameters
         self.delta = 0.01
-        self.dispersal_fxn = "random_dispersal"
-        self.edge_fxn = "static_reflect"
+        self.dispersal_model = "random"
+        self.edge_model = "closed"
         self.d_scale = 2
 
         # space parameters
@@ -212,30 +205,26 @@ class Params:
         self.H_fitness = 1
         self.extrinsic_fitness = False
         self.female_fitness = False
-
         self.k_1 = -20
         self.k_2 = -self.k_1
-
         self.mu = 0.2
-
         self.mid_1 = 0.5
         self.mid_2 = 0.5
 
+        # general
         self.history_type = "Pedigree"
         self.task = "return_pop_matrix"
         self.bug_check = None
 
         # coalescence and genetic parameters
-        self.sample_sizes = [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
-        self.sample_bins = [[0, 0.1], [0.1, 0.2], [0.2, 0.3], [0.3, 0.4],
-                            [0.4, 0.5], [0.5, 0.6], [0.6, 0.7], [0.7, 0.8],
-                            [0.8, 0.9], [0.9, 1.0]]
+        self.sample_n = 100
+        self.n_sample_bins = 10
         self.n_windows = 10
 
-        self.demog_model = "threepop"
+        self.demographic_model = "threepop"
         self.mig_rate = 1e-4
         self.seq_length = 1e4
-        self.recomb_rate = 1e-8
+        self.recombination_rate = 1e-8
         self.u = 1e-8
 
     def set_c(self, c, pref_model):
@@ -371,17 +360,6 @@ class Params:
         plt.xticks(np.arange(0, 1.1, 0.1))
         plt.yticks(np.arange(0, 1.1, 0.1))
 
-    def set_coalescence_params(self, n, n_bins):
-        """Set up the parameters for coalescence simulation with n total
-        organisms in n_bins
-        """
-        self.sample_sizes = [int(i) for i in
-                             list(np.full(n_bins, n // n_bins))]
-        sample_bins = np.zeros((n_bins, 2))
-        sample_bins[:, :] = np.arange(0, 1, 1 / n_bins)[:, None]
-        sample_bins[:, 1] += 1 / n_bins
-        self.sample_bins = [list(i) for i in sample_bins]
-
     def print_genetic_params(self):
         genetic_params = ["sample_sizes", "sample_bins", "n_windows",
                           "demog_model", "mig_rate", "seq_length",
@@ -415,30 +393,3 @@ class Params:
         for param in param_dict:
             setattr(params, param, param_dict[param])
         return (params)
-
-
-
-
-
-
-def compute_pd(x_vec, scale):
-    """Compute a vector of probability density values for a normal distribution
-    with standard deviation params.beta, mean 0.
-    Arguments
-    ------------
-    x_vec: np array
-        The vector of x values to compute probability densities for. Should
-        represent male distances from a female
-
-    scale:  float
-        the standard deviation of the normal distribution
-
-    Returns
-    ------------
-    pd_vec: np array
-        An array of probability density values corresponding to the x_vec
-    """
-    pd_vec = (1 / (scale * np.sqrt(2 * np.pi)) *
-              np.exp(-0.5 * np.square(x_vec / scale)))
-    return (pd_vec)
-
