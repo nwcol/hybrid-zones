@@ -19,7 +19,7 @@ import plot_util
 plt.rcParams['figure.dpi'] = 100
 
 
-class PedigreeType:
+class PedigreeLike:
     """The superclass of pedigree-like objects, which includes Generation,
     Pedigree and SamplePedigree
 
@@ -51,14 +51,22 @@ class PedigreeType:
     _mat_alleles = [0, 2]
     _pat_alleles = [1, 3]
 
+    def __init__(self):
+        self.arr = None
+        self.params = None
 
-class Generation(PedigreeType):
+    def get_x(self):
+        return self.arr[:, self._x]
+
+
+class Generation(PedigreeLike):
     """The fundamental unit of simulation. Composed of N rows, each
     representing an organism.
     """
 
     def __init__(self, N, x, t, parent_ids, alleles, params):
         """n corresponds to n_filled in the Pedigree"""
+        super().__init__()
         self.params = params
         self.t = t
         self.N = N
@@ -284,8 +292,8 @@ class Generation(PedigreeType):
     @staticmethod
     def compute_bounds(seeking_sex, target_sex, limits):
         """Compute bounds, given two arrays as arguments"""
-        x_0 = seeking_sex[:, PedigreeType._x]
-        x_1 = target_sex[:, PedigreeType._x]
+        x_0 = seeking_sex[:, PedigreeLike._x]
+        x_1 = target_sex[:, PedigreeLike._x]
         l_bound = np.searchsorted(a = x_1, v = x_0 + limits[0])
         r_bound = np.searchsorted(a = x_1, v = x_0 + limits[1])
         bounds = np.column_stack((l_bound, r_bound))
@@ -499,7 +507,7 @@ class Generation(PedigreeType):
         return fig
 
 
-class MatingPairs(PedigreeType):
+class MatingPairs(PedigreeLike):
     organism_axis = 0
     sex_axis = 1
     character_axis = 2
@@ -597,7 +605,7 @@ class MatingPairs(PedigreeType):
         return self.N
 
 
-class Pedigree(PedigreeType):
+class Pedigree(PedigreeLike):
 
     adjust_fac = 1.01
 
