@@ -25,3 +25,14 @@ def logistic_fxn(x, k, x_0):
 def optimize_logistic(data, x):
     popt, pcov = opt.curve_fit(logistic_fxn, x, data)
     return popt, pcov
+
+
+def divides(a, b):
+    """Return a bool True if a divides b, else return False"""
+    if b % a == 0:
+        div = True
+    else:
+        div = False
+    return div
+
+

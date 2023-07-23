@@ -18,6 +18,9 @@ plt.rcParams['figure.dpi'] = 100
 
 
 class Generation:
+    """The fundamental unit of simulation. Composed of N rows, each
+    representing an organism.
+    """
     organism_axis = 0
     character_axis = 1
 
@@ -42,23 +45,19 @@ class Generation:
     @classmethod
     def get_founding(cls, params):
         """create the founding generation"""
-        Ns = np.array([params.N_A1B1, params.N_A1B2, params.N_A2B1,
-                       params.N_A2B2], dtype=np.int32)
-        limits = [params.spawnlimit_A1B1, params.spawnlimit_A1B2,
-                  params.spawnlimit_A2B1, params.spawnlimit_A2B2]
-        genotypes = np.array([[1, 1, 1, 1], [1, 1, 2, 2], [2, 2, 1, 1],
-                              [2, 2, 2, 2]], dtype=Struc.dtype)
-        a = []
-        xx = []
-        for i in np.arange(4):
-            if Ns[i] > 0:
-                a.append(np.repeat(genotypes[None, i], Ns[i], axis=0))
-                xx.append(np.random.uniform(limits[i][0], limits[i][1], Ns[i]))
-        alleles = np.vstack(a)
-        x = np.concatenate(xx)
-        N = np.sum(Ns)
-        parent_ids = np.full((N, 2), -1, dtype=Struc.dtype)
+        N = params.N
         t = params.g
+        parent_ids = np.full((N, 2), -1, dtype=Struc.dtype)
+        _alleles = []
+        _x = []
+        for i, genotype in enumerate(Const.genotypes):
+            n = params.subpop_n[i]
+            if n > 0:
+                _alleles.append(np.repeat(genotype[np.newaxis, :], n, axis=0))
+                lower, upper = params.subpop_lims[i]
+                _x.append(np.random.uniform(lower, upper, n))
+        alleles = np.vstack(_alleles)
+        x = np.concatenate(_x)
         return cls(N, x, t, parent_ids, alleles, params)
 
     @classmethod
@@ -86,12 +85,42 @@ class Generation:
         alleles = np.vstack((gen1.get_alleles(), gen2.get_alleles()))
         return cls(N, x, t, parent_ids, alleles, params)
 
+    def __add__(self, generation):
+        # index handling is tricky
+        if self.params != generation.params:
+            print("Warning! Generations with different parameter sets have \
+                  been added")
+        params = self.params
+        if self.t != generation.t:
+            print("Warning! Generations with different times have been added")
+        t = self.t
+        N = len(self) + len(generation)
+        x = np.concatenate((self.get_x(), generation.get_x()))
+        parent_ids = np.vstack((self.get_parents(), generation.get_parents()))
+        alleles = np.vstack((self.get_alleles(), generation.get_alleles()))
+        return Generation(N, x, t, parent_ids, alleles, params)
+
     @classmethod
     def get_migrants(cls, x, species, t, params):
         N = len(x)
         parent_ids = np.full((N, 2), -1)
         alleles = np.full((N, Struc.n_alleles), species)
         return cls(N, x, t, parent_ids, alleles, params)
+
+    def __len__(self):
+        """Return the n umber of organisms represented in the generation"""
+        return len(self.arr)
+
+    def __getitem__(self, i):
+        """Return the organism at index or indices i"""
+        return self.arr[i, :]
+
+    def __str__(self):
+        return f"Generation object at t = {self.t} with N = {self.N}"
+
+    def __repr__(self):
+        """Does not conform to how a repr should behave :-("""
+        return f"Generation object at t = {self.t} with N = {self.N}"
 
     def precompute(self):
         """Compute a set of useful vectors, arrays etc once a generation

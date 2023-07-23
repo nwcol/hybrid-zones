@@ -170,11 +170,9 @@ class Params:
         """
 
         # population parameters
-        self.N_A1B1 = N // 2
-        self.N_A1B2 = 0
-        self.N_A2B1 = 0
-        self.N_A2B2 = N // 2
-
+        self.N = N
+        self.subpop_n = [N//2, 0, 0, 0, 0, 0, 0, 0, N//2]
+        self.subpop_lims = [[0, 0.5], [], [], [], [], [], [], [], [0.5, 1]]
         self.K = N
         self.r = 0.5
         self.g = g
@@ -191,13 +189,6 @@ class Params:
         self.dispersal_model = "random"
         self.edge_model = "closed"
         self.d_scale = 2
-
-        # space parameters
-        self.spawnlimit_A1B1 = (0, 0.5)
-        self.spawnlimit_A1B2 = (0, 0.5)
-        self.spawnlimit_A2B1 = (0.5, 1)
-        self.spawnlimit_A2B2 = (0.5, 1)
-
         self.density_bound = 0.005
 
         # fitness parameters
@@ -226,6 +217,10 @@ class Params:
         self.seq_length = 1e4
         self.recombination_rate = 1e-8
         self.u = 1e-8
+
+    def __str__(self):
+        return f"Parameters: K = {self.K}, N = {self.N}, g = {self.g}, \
+                c = {self.c} with {self.pref_model} model."
 
     def set_c(self, c, pref_model):
         """Declare the parameter set's c-parameter and the accompanying
