@@ -1,32 +1,6 @@
 import numpy as np
 
 
-class Struc:
-    """Defines the structure of the generation and pedigree class objects"""
-    dtype = np.float32
-    n_cols = 11
-    sex = 0
-    i = 1
-    x = 2
-    t = 3
-    mat_id = 4
-    pat_id = 5
-    A_loc0 = 6
-    A_loc1 = 7
-    B_loc0 = 8
-    B_loc1 = 9
-    flag = 10
-    coords = [2, 3]
-    parents = [4, 5]
-    alleles = [6, 7, 8, 9]
-    A_loci = [6, 7]
-    B_loci = [8, 9]
-    n_alleles = 4
-    mat_allele_positions = [0, 2]
-    pat_allele_positions = [1, 3]
-    adjust_fac = 1.01
-
-
 class Const:
     bin_size = 0.01
     n_bins = int(1 / bin_size)

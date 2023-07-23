@@ -12,17 +12,50 @@ import dispersal_models
 
 import fitness_models
 
-from constants import Struc, Const
+from constants import Const
+
+import plot_util
 
 plt.rcParams['figure.dpi'] = 100
 
 
-class Generation:
-    """The fundamental unit of simulation. Composed of N rows, each
-    representing an organism.
+class PedigreeType:
+    """The superclass of pedigree-like objects, which includes Generation,
+    Pedigree and SamplePedigree
+
+    Attributes preceded by a single underscore give column indices which
+    access the type of information implied by the attribute name
     """
     organism_axis = 0
     character_axis = 1
+    dtype = np.float32
+    adjust_fac = 1.01
+    n_cols = 11
+    n_alleles = 4
+    _sex = 0
+    _i = 1
+    _x = 2
+    _t = 3
+    _mat_id = 4
+    _pat_id = 5
+    _A_loc0 = 6
+    _A_loc1 = 7
+    _B_loc0 = 8
+    _B_loc1 = 9
+    _flag = 10
+    _coord = [2, 3]
+    _parents = [4, 5]
+    _alleles = [6, 7, 8, 9]
+    _A_loci = [6, 7]
+    _B_loci = [8, 9]
+    _mat_alleles = [0, 2]
+    _pat_alleles = [1, 3]
+
+
+class Generation(PedigreeType):
+    """The fundamental unit of simulation. Composed of N rows, each
+    representing an organism.
+    """
 
     def __init__(self, N, x, t, parent_ids, alleles, params):
         """n corresponds to n_filled in the Pedigree"""
@@ -30,14 +63,14 @@ class Generation:
         self.t = t
         self.N = N
         self.K = params.K
-        arr = np.zeros((N, Struc.n_cols), dtype=Struc.dtype)
-        arr[:, Struc.sex] = np.random.randint(0, 2, N)
-        arr[:, Struc.x] = x
-        arr[:, Struc.t] = t
-        arr[:, Struc.mat_id] = parent_ids[:, 0]
-        arr[:, Struc.pat_id] = parent_ids[:, 1]
-        arr[:, Struc.alleles] = alleles
-        arr[:, Struc.flag] = 1
+        arr = np.zeros((N, self.n_cols), dtype=self.dtype)
+        arr[:, self._sex] = np.random.randint(0, 2, N)
+        arr[:, self._x] = x
+        arr[:, self._t] = t
+        arr[:, self._mat_id] = parent_ids[:, 0]
+        arr[:, self._pat_id] = parent_ids[:, 1]
+        arr[:, self._alleles] = alleles
+        arr[:, self._flag] = 1
         self.arr = arr
         self.flag = 1
         self.sort()
@@ -47,17 +80,17 @@ class Generation:
         """create the founding generation"""
         N = params.N
         t = params.g
-        parent_ids = np.full((N, 2), -1, dtype=Struc.dtype)
-        _alleles = []
-        _x = []
+        parent_ids = np.full((N, 2), -1, dtype=cls.dtype)
+        alleles_ = []
+        x_ = []
         for i, genotype in enumerate(Const.genotypes):
             n = params.subpop_n[i]
             if n > 0:
-                _alleles.append(np.repeat(genotype[np.newaxis, :], n, axis=0))
+                alleles_.append(np.repeat(genotype[np.newaxis, :], n, axis=0))
                 lower, upper = params.subpop_lims[i]
-                _x.append(np.random.uniform(lower, upper, n))
-        alleles = np.vstack(_alleles)
-        x = np.concatenate(_x)
+                x_.append(np.random.uniform(lower, upper, n))
+        alleles = np.vstack(alleles_)
+        x = np.concatenate(x_)
         return cls(N, x, t, parent_ids, alleles, params)
 
     @classmethod
@@ -104,7 +137,7 @@ class Generation:
     def get_migrants(cls, x, species, t, params):
         N = len(x)
         parent_ids = np.full((N, 2), -1)
-        alleles = np.full((N, Struc.n_alleles), species)
+        alleles = np.full((N, cls.n_alleles), species)
         return cls(N, x, t, parent_ids, alleles, params)
 
     def __len__(self):
@@ -155,7 +188,7 @@ class Generation:
         b = params.density_bound
         k = params.K * b
         females = self.get_females()
-        f_x = females[:, Struc.x]
+        f_x = females[:, self._x]
         adjustment = np.zeros(len(f_x))
         adjustment[f_x < b] = (b - f_x[f_x < b]) / b * k
         adjustment[f_x > 1 - b] = (f_x[f_x > 1 - b] - 1 + b) / b * k
@@ -166,7 +199,7 @@ class Generation:
         female's preference: B1B1 0, B1B2 1, B2B2 2
         """
         f_idx = self.get_f_idx()
-        B_sums = np.sum(self.arr[np.ix_(f_idx, Struc.B_loci)], axis = 1)
+        B_sums = np.sum(self.arr[np.ix_(f_idx, self._B_loci)], axis = 1)
         pref_idx = (B_sums - 2).astype(np.int32)
         return pref_idx
 
@@ -176,38 +209,27 @@ class Generation:
         B2B2
         """
         m_idx = self.get_m_idx()
-        A_sums = np.sum(self.arr[np.ix_(m_idx, Struc.A_loci)], axis = 1)
+        A_sums = np.sum(self.arr[np.ix_(m_idx, self._A_loci)], axis = 1)
         trait_vec = (A_sums - 2).astype(np.int32)
         pref_matrix = np.full((self.get_M(), 3), 1, dtype=np.float32)
+        c_matrix = params.get_c_matrix()
         for i in [0, 1, 2]:
-            pref_matrix[:, i] = params.c_matrix[trait_vec, i]
+            pref_matrix[:, i] = c_matrix[trait_vec, i]
         return pref_matrix
 
-    @staticmethod
-    def interpret_dispersal_model(params):
-        if params.dispersal_model == "random":
-            fxn = dispersal_models.random_dispersal
-        elif params.dispersal_model == "scale":
-            fxn = dispersal_models.scale_dispersal
-        elif params.dispersal_model == "shift":
-            fxn = dispersal_models.shift_dispersal
-        else:
-            print("invalid dispersal model")
-            fxn = None
-        return fxn
-
     def disperse(self, params):
-        fxn = self.interpret_dispersal_model(params)
-        delta = fxn(self, params)
-        if params.edge_model == "closed":
-            self.closed(delta)
-        elif params.edge_model == "flux":
-            self.flux(delta, params)
-        elif params.edge_model == "ring":
-            self.ring(delta)
+        disp_dict = dispersal_models.dispersal_model_dict
+        if params.dispersal_model in disp_dict:
+            delta = disp_dict[params.dispersal_model](self, params)
         else:
-            print("invalid edge model")
-        self.arr[:, Struc.x] += delta
+            raise Exception("Dispersal model '%s' is invalid!" %
+                            params.dispersal_model)
+        edge_model_dict = {"closed" : self.closed, "flux" : self.flux,
+                           "ring" : self.ring}
+        if params.edge_model in edge_model_dict:
+            edge_model_dict[params.edge_model](delta)
+        else:
+            raise Exception("Edge model '%s' is invalid!" % params.edge_model)
 
     def closed(self, delta):
         """Set the displacement of any individual who would exit the space when
@@ -216,10 +238,10 @@ class Generation:
         positions = delta + self.get_x()
         delta[positions < 0] = 0
         delta[positions > 1] = 0
-        self.arr[:, Struc.x] += delta
+        self.arr[:, self._x] += delta
 
     def flux(self, delta, params):
-        self.arr[:, Struc.x] += delta
+        self.arr[:, self._x] += delta
         t = self.t
         exits = self.detect_exits()
         self.set_flags(exits, -3)
@@ -229,23 +251,23 @@ class Generation:
         right_migrants, runlog = Generation.get_migrants(right_x, 2, t, params)
         migrants = Generation.merge(left_migrants, right_migrants)
         self = Generation.merge(self, migrants)
-        # no idea if this works
+        # no idea if this works lol
 
     def ring(self, delta):
         """An experimental edge function where individuals who exit the space
         are deposited onto the other side of space, creating a closed loop
         """
-        self.arr[:, Struc.x] += delta
-        self.arr[self.detect_l_exits(), Struc.x] += 1
-        self.arr[self.detect_r_exits(), Struc.x] -= 1
+        self.arr[:, self._x] += delta
+        self.arr[self.detect_l_exits(), self._x] += 1
+        self.arr[self.detect_r_exits(), self._x] -= 1
 
     def detect_l_exits(self):
         """Return an index of left exits"""
-        return np.where(self.arr[:, Struc.x] < 0)[0]
+        return np.where(self.arr[:, self._x] < 0)[0]
 
     def detect_r_exits(self):
         """Return an index of right exits"""
-        return np.where(self.arr[:, Struc.x] > 1)[0]
+        return np.where(self.arr[:, self._x] > 1)[0]
 
     def detect_exits(self):
         """Return the indices of individuals with invalid x coordinates outside
@@ -259,15 +281,11 @@ class Generation:
         if params.extrinsic_fitness:
             fitness_models.extrinsic_fitness(self, params)
 
-    def set_flags(self, idx, x):
-        """Flag individuals at index idx with flag x"""
-        self.arr[idx, Struc.flag] = x
-
     @staticmethod
     def compute_bounds(seeking_sex, target_sex, limits):
         """Compute bounds, given two arrays as arguments"""
-        x_0 = seeking_sex[:, Struc.x]
-        x_1 = target_sex[:, Struc.x]
+        x_0 = seeking_sex[:, PedigreeType._x]
+        x_1 = target_sex[:, PedigreeType._x]
         l_bound = np.searchsorted(a = x_1, v = x_0 + limits[0])
         r_bound = np.searchsorted(a = x_1, v = x_0 + limits[1])
         bounds = np.column_stack((l_bound, r_bound))
@@ -316,7 +334,7 @@ class Generation:
     def get_male_signal_sums(self):
         """Return the sum of signal alleles for males only"""
         males = self.get_males()
-        return np.sum(males[:, Struc.A_loci], axis = 1)
+        return np.sum(males[:, self._A_loci], axis = 1)
 
     def get_male_signal_indices(self):
         signal_sums = self.get_male_signal_sums()
@@ -327,7 +345,7 @@ class Generation:
 
     def get_signal_sums(self):
         """Return the sum of signal alleles for all individuals"""
-        return np.sum(self.arr[:, Struc.A_loci], axis = 1)
+        return np.sum(self.arr[:, self._A_loci], axis = 1)
 
     def get_signal_indices(self):
         signal_sums = self.get_signal_sums()
@@ -339,29 +357,29 @@ class Generation:
     def get_sex_indices(self):
         """Return the indices of females and of males in a generation
         """
-        f_idx = np.where(self.arr[:, Struc.sex] == 0)[0]
-        m_idx = np.where(self.arr[:, Struc.sex] == 1)[0]
+        f_idx = np.where(self.arr[:, self._sex] == 0)[0]
+        m_idx = np.where(self.arr[:, self._sex] == 1)[0]
         return f_idx, m_idx
 
     def get_sex_idx(self, sex):
         """Given an integer sex = 0 or sex = 1, return the appropriate sex"""
-        return np.where(self.arr[:, Struc.sex] == sex)
+        return np.where(self.arr[:, self._sex] == sex)
 
     def get_f_idx(self):
         """Return the indices of the females in a generation"""
-        return np.where(self.arr[:, Struc.sex] == 0)[0]
+        return np.where(self.arr[:, self._sex] == 0)[0]
 
     def get_m_idx(self):
         """return the indices of the males in the generation"""
-        return np.where(self.arr[:, Struc.sex] == 1)[0]
+        return np.where(self.arr[:, self._sex] == 1)[0]
 
     def get_f_x(self):
         """Return a vector of male x positions"""
-        return self.arr[self.get_f_idx(), Struc.x]
+        return self.arr[self.get_f_idx(), self._x]
 
     def get_m_x(self):
         """Return a vector of male x positions"""
-        return self.arr[self.get_m_idx(), Struc.x]
+        return self.arr[self.get_m_idx(), self._x]
 
     def update_N(self):
         """Update N"""
@@ -388,16 +406,16 @@ class Generation:
         return self.arr[self.get_f_idx()]
 
     def get_alleles(self):
-        return self.arr[:, Struc.alleles]
+        return self.arr[:, self._alleles]
 
     def get_parents(self):
-        return self.arr[:, Struc.parents].astype(np.int32)
+        return self.arr[:, self._parents].astype(np.int32)
 
     def get_t(self):
         return self.t
 
     def get_x(self):
-        return self.arr[:, Struc.x]
+        return self.arr[:, self._x]
 
     def split_gen(self):
         """Get arrays containing only the female and male individuals of a
@@ -424,13 +442,13 @@ class Generation:
         N = self.get_N()
         i1 = i0 + N
         ids = np.arange(i0, i1)
-        self.arr[:, Struc.i] = ids
+        self.arr[:, self._i] = ids
         return i1
 
     def get_allele_sums(self):
         allele_sums = np.zeros((self.N, 2))
-        allele_sums[:, 0] = np.sum(self.arr[:, Struc.A_loci], axis=1)
-        allele_sums[:, 1] = np.sum(self.arr[:, Struc.B_loci], axis=1)
+        allele_sums[:, 0] = np.sum(self.arr[:, self._A_loci], axis=1)
+        allele_sums[:, 1] = np.sum(self.arr[:, self._B_loci], axis=1)
         return allele_sums
 
     def get_subpop_idx(self):
@@ -445,15 +463,28 @@ class Generation:
 
     def get_living(self):
         """Return the index of living organisms with flag = 1"""
-        return np.where(self.arr[:, Struc.flag] == 1)[0]
+        return np.where(self.arr[:, self._flag] == 1)[0]
 
     def senescence(self):
         self.flag = 0
-        self.arr[self.get_living(), Struc.flag] = 0
+        self.arr[self.get_living(), self._flag] = 0
+
+    def get_flag_idx(self, flag):
+        """Get the indices of all individuals with flag = flag"""
+        return np.where(self.arr[:, self._flag] == flag)
 
     def get_dead_idx(self):
         """Get the index of individuals with flag < 0"""
-        return np.where(self.arr[:, Struc.flag] < 0)[0]
+        return np.where(self.arr[:, self._flag] < 0)[0]
+
+    def set_flags(self, idx, x):
+        """Flag individuals at index idx with flag x"""
+        self.arr[idx, self._flag] = x
+
+    def set_all_flags(self, flag):
+        """Set all flags which equal 1 to arg 'flag'"""
+        flagged_1 = self.get_flag_idx(1)
+        self.arr[flagged_1, self._flag] = flag
 
     def remove_dead(self):
         """Delete individuals with flag != 1 or 0. Counterintuitively,
@@ -468,9 +499,8 @@ class Generation:
         return fig
 
 
-class MatingPairs:
-
-    i_axis = 0
+class MatingPairs(PedigreeType):
+    organism_axis = 0
     sex_axis = 1
     character_axis = 2
 
@@ -482,7 +512,7 @@ class MatingPairs:
 
     def initialize_pair_ids(self, n_offspring):
         self.N = np.sum(n_offspring)
-        mating_pair_ids = np.zeros((self.N, 2), dtype = np.int32)
+        mating_pair_ids = np.zeros((self.N, 2), dtype=np.int32)
         return mating_pair_ids
 
     @staticmethod
@@ -495,7 +525,16 @@ class MatingPairs:
             fxn = mating_models.unbounded
         else:
             print("invalid mating function")
+            fxn = None
         return fxn
+
+    def __len__(self):
+        """Return the number of per offspring pairings in the array"""
+        return self.N
+
+    def __getitem__(self, i):
+        """Get the pairing at index i"""
+        return self.arr[i, :, :]
 
     def compute_pair_ids(self, generation, params):
         fxn = self.interpret_mating_fxn(params)
@@ -506,7 +545,7 @@ class MatingPairs:
         n_offspring = generation.compute_n_offspring(params)
         b = params.bound
         bounds = generation.compute_sex_bounds(0, 1, [-b, b])
-        mating_pair_ids = self.initialize_pair_ids(n_offspring)
+        pair_ids = self.initialize_pair_ids(n_offspring)
         F = generation.get_F()
         i = 0
         for f_id in np.arange(F):
@@ -514,50 +553,53 @@ class MatingPairs:
                 x = f_x_vec[f_id]
                 m_id = fxn(x, m_x_vec, pref_matrix[:, pref_vec_idx[f_id]],
                     bounds[f_id], params)
-                mating_pair_ids[i:i + n_offspring[f_id]] = [f_id, m_id]
+                pair_ids[i:i + n_offspring[f_id]] = [f_id, m_id]
                 i += n_offspring[f_id]
             else:
                 pass
-        return mating_pair_ids
+        return pair_ids
 
     def get_mating_pairs(self, generation):
         """Uses the mating_id_arr to organize a 3d array containing each
         parent's pedigree entry explicitly.
         """
-        self.arr = np.zeros((len(self.pair_ids), 2, Struc.n_cols))
+        self.arr = np.zeros((len(self.pair_ids), 2, self.n_cols))
         females, males = generation.split_gen()
         self.arr[:, 0, :] = females[self.pair_ids[:, 0]]
         self.arr[:, 1, :] = males[self.pair_ids[:, 1]]
 
     def get_zygotes(self):
-        zygotes = np.zeros((self.N, Struc.n_alleles), dtype = Struc.dtype)
-        zygotes[:, Struc.mat_allele_positions] = self.get_gametes(0)
-        zygotes[:, Struc.pat_allele_positions] = self.get_gametes(1)
+        """Use the self.get_gametes to randomly draw gametes from parents and
+        combine them in a pre-initialized array to get an array of alleles.
+        This array is used to designate alleles for the child generation
+        """
+        zygotes = np.zeros((self.N, self.n_alleles), dtype=self.dtype)
+        zygotes[:, self._mat_alleles] = self.get_gametes(0)
+        zygotes[:, self._pat_alleles] = self.get_gametes(1)
         return zygotes
 
     def get_gametes(self, sex):
         idx0 = np.arange(self.N)
-        A_idx = np.random.randint(0, 2, size = self.N) + Struc.A_loc0
-        B_idx = np.random.randint(0, 2, size = self.N) + Struc.B_loc0
-        gametes = np.zeros((self.N, 2), dtype = Struc.dtype)
+        A_idx = np.random.randint(0, 2, size = self.N) + self._A_loc0
+        B_idx = np.random.randint(0, 2, size = self.N) + self._B_loc0
+        gametes = np.zeros((self.N, 2), dtype = self.dtype)
         gametes[:, 0] = self.arr[idx0, sex, A_idx]
         gametes[:, 1] = self.arr[idx0, sex, B_idx]
         return gametes
 
     def get_parental_ids(self):
-        return self.arr[:, :, Struc.i]
+        return self.arr[:, :, self._i]
 
     def get_maternal_x(self):
-        return self.arr[:, 0, Struc.x]
+        return self.arr[:, 0, self._x]
 
     def get_N(self):
         return self.N
 
 
-class Pedigree:
+class Pedigree(PedigreeType):
 
-    organism_axis = 0
-    character_axis = 1
+    adjust_fac = 1.01
 
     def __init__(self, arr, params, max = None):
         self.arr = arr
@@ -569,16 +611,25 @@ class Pedigree:
 
     @classmethod
     def new(cls, params):
-        max = int(params.K * (params.g + 1) * Struc.adjust_fac)
-        arr = np.zeros((max, Struc.n_cols), dtype=Struc.dtype)
+        max = int(params.K * (params.g + 1) * cls.adjust_fac)
+        arr = np.zeros((max, cls.n_cols), dtype=cls.dtype)
         return cls(arr, params, max)
+
+    def __len__(self):
+        """Return the number of generations included in the pedigree"""
+        return len(np.uniques(self.arr[:, self._t]))
+
+    def __getitem__(self, t):
+        """Return the generation at time t"""
+        return self.get_generation(t)
 
     def load(self, filename):
         pass
 
-    def enter_gen(self, generation, i0, i1):
+    def enter_gen(self, generation, i0, i1, flag=0):
         if i1 > self.max:
             self.expand()
+        generation.set_all_flags(flag)
         self.insert_gen(generation, i0, i1)
         self.t = generation.t
 
@@ -589,8 +640,8 @@ class Pedigree:
         """expand the pedigree to accommodate more organisms"""
         g_elapsed = self.g - self.t
         avg_util = int(self.max / g_elapsed)
-        new_max = int(avg_util * self.t * Struc.adjust_fac)
-        aux_arr = np.zeros((new_max, Struc.n_cols), dtype=Struc.dtype)
+        new_max = int(avg_util * self.t * self.adjust_fac)
+        aux_arr = np.zeros((new_max, self.n_cols), dtype=self.dtype)
         self.arr = np.vstack((self.arr, aux_arr))
         self.max += new_max
         print("pedigree arr expanded " + str(new_max)
@@ -605,33 +656,34 @@ class Pedigree:
               + str(frac) + "% utilization")
 
     def get_gen_arr(self, t):
-        return self.arr[np.where(self.arr[:, Struc.t] == t)[0]]
+        return self.arr[np.where(self.arr[:, self._t] == t)[0]]
 
     def get_generation(self, t):
-        """Return an array of organisms in a given gen"""
+        """Reconstruct a Generation instance for all the organisms with time
+        coordinate t"""
         gen = self.get_gen_arr(t)
         N = len(gen)
-        generation = Generation(N, gen[:, Struc.x], t, gen[:, Struc.parents],
-                                gen[:, Struc.alleles], self.params)
-        generation.arr[:, Struc.i] = gen[:, Struc.i]
+        generation = Generation(N, gen[:, self._x], t, gen[:, self._parents],
+                                gen[:, self._alleles], self.params)
+        generation.arr[:, self._i] = gen[:, self._i]
         return generation
 
     def get_total_N(self):
         return np.shape(self.arr)[0]
 
     def get_gen_N(self, t):
-        return np.size(np.where(self.arr[:, Struc.t] == t)[0])
+        return np.size(np.where(self.arr[:, self._t] == t)[0])
 
     def get_gen_idx(self, t):
-        return np.where(self.arr[:, Struc.t] == t)[0]
+        return np.where(self.arr[:, self._t] == t)[0]
 
     def compute_ancestry(self, t = 0):
         N = self.get_total_N()
         anc = np.zeros((N, 3), dtype=np.float32)
-        parents = self.arr[:, Struc.parents].astype(np.int32)
+        parents = self.arr[:, self._parents].astype(np.int32)
         founders = self.get_gen_idx(self.g)
         anc[founders, :2] = parents[founders]
-        anc[founders, 2] = self.arr[founders, Struc.A_loc0] - 1
+        anc[founders, 2] = self.arr[founders, self._A_loc0] - 1
         for i in np.arange(self.g - 1, t - 1, -1):
             gen_idx = self.get_gen_idx(i)
             gen_parents = parents[gen_idx]
@@ -649,11 +701,12 @@ class AbbrevPedigree:
     organism_axis = 0
     character_axis = 1
     dtype = np.int32
+    adjust_fac = 1.01
     n_cols = 4
-    t = 0
-    mat_id = 1
-    pat_id = 2
-    subpop_code = 4
+    _t = 0
+    _mat_id = 1
+    _pat_id = 2
+    _subpop_code = 4
     map = np.array([3, 4, 5])
 
     def __init__(self, arr, params, max = None):
@@ -669,7 +722,7 @@ class AbbrevPedigree:
 
     @classmethod
     def new(cls, params):
-        max = int(params.K * (params.g + 1) * Struc.adjust_fac)
+        max = int(params.K * (params.g + 1) * cls.adjust_fac)
         arr = np.zeros((max, cls.n_cols), dtype=cls.dtype)
         return cls(arr, params, max)
 
@@ -682,6 +735,9 @@ class AbbrevPedigree:
         self.founding_gen = generation
 
     def enter_gen(self, generation, i0, i1):
+        """Record a Generation instance in the pedigree after flagging it
+        with 'flag'
+        """
         if i1 > self.max:
             self.expand()
         self.insert_gen(generation, i0, i1)
@@ -695,8 +751,8 @@ class AbbrevPedigree:
         """expand the pedigree to accommodate more organisms"""
         g_elapsed = self.g - self.t
         avg_util = int(self.max / g_elapsed)
-        new_max = int(avg_util * self.t * Struc.adjust_fac)
-        aux_arr = np.zeros((new_max, self.n_cols), dtype=Struc.dtype)
+        new_max = int(avg_util * self.t * self.adjust_fac)
+        aux_arr = np.zeros((new_max, self.n_cols), dtype=self.dtype)
         self.arr = np.vstack((self.arr, aux_arr))
         self.max += new_max
         print("pedigree arr expanded " + str(new_max)
@@ -736,23 +792,21 @@ class Trial:
             self.abbrev_pedigree = AbbrevPedigree.new(params)
             self.get_abbrev_pedigree()
         elif self.type == "SubpopArr":
-            self.subpop_arr = SubpopArr.new()
+            self.subpop_arr = SubpopArr.new(params)
             self.get_subpop_arr()
 
     def get_pedigree(self):
         print("simulation initiated @ " + self.get_time_string())
+        self.time_vec[self.params.g] = 0
         generation = Generation.get_founding(params)
         i1 = generation.sort_and_id(self.i0)
         self.update_i(i1)
-        generation.senescence()
-        self.pedigree.enter_gen(generation, self.i0, self.i1)
-        self.time_vec[self.params.g] = 0
         if self.plot_int:
             self.figs.append(generation.plot_subpops())
         while self.t > 0:
-            generation.senescence()
+            self.pedigree.enter_gen(generation, self.i0, self.i1, flag=0)
             generation = self.cycle(generation)
-            self.pedigree.enter_gen(generation, self.i0, self.i1)
+        self.pedigree.enter_gen(generation, self.i0, self.i1, flag=1)
         self.pedigree.trim(self.i1)
         if self.plot_int:
             for fig in self.figs:
@@ -764,14 +818,14 @@ class Trial:
         generation = Generation.get_founding(params)
         i1 = generation.sort_and_id(self.i0)
         self.update_i(i1)
-        self.abbrev_pedigree.enter_gen(generation, self.i0, self.i1)
         self.abbrev_pedigree.save_first_gen(generation)
         self.time_vec[self.params.g] = 0
         if self.plot_int:
             self.figs.append(generation.plot_subpops())
         while self.t > 0:
-            generation = self.cycle(generation)
             self.abbrev_pedigree.enter_gen(generation, self.i0, self.i1)
+            generation = self.cycle(generation)
+        self.abbrev_pedigree.enter_gen(generation, self.i0, self.i1)
         self.abbrev_pedigree.save_last_gen(generation)
         self.abbrev_pedigree.trim(self.i1)
         if self.plot_int:
@@ -838,16 +892,40 @@ class Trial:
         return str(time.strftime("%H:%M:%S", time.localtime()))
 
 
-class GenSubpopArr:
+class Histograms:
+    """The superclass of class which use histograms to record genotype/subpop
+    and allele densities or frequencies.
+    """
+
+    def __init__(self, bin_size):
+        self.bin_size = bin_size
+        self.n_bins = int(1 / bin_size)
+        self.bins = np.linspace(0, 1, self.n_bins + 1)
+        self.bins_left = np.linspace(0, 1 - bin_size, self.n_bins)
+        self.bins_right = np.linspace(bin_size, 1, self.n_bins)
+        h_bin_size = bin_size / 2
+        self.bins_mid = np.linspace(h_bin_size, 1 - h_bin_size, self.n_bins)
+
+
+class SubpopArrType(Histograms):
+    """The superclass defining the structure of generation- and pedigree-scale
+    subpopulation arrays, which record histograms of subpopulation densities
+    throughout time, and the methods common to them.
+    """
+    dtype = np.int32
+
+
+class GenSubpopArr(SubpopArrType):
     space_axis = 0
     subpop_axis = 1
 
-    def __init__(self, generation):
-        self.arr = np.zeros((Const.n_bins, Const.n_subpops), dtype=np.int32)
+    def __init__(self, generation, bin_size = 0.01):
+        super().__init__(bin_size)
+        self.arr = np.zeros((Const.n_bins, Const.n_subpops), dtype=self.dtype)
         x = generation.get_x()
         subpop_idx = generation.get_subpop_idx()
         for i in np.arange(9):
-            self.arr[:, i] = np.histogram(x[subpop_idx == i], bins=Const.bins)[0]
+            self.arr[:, i] = np.histogram(x[subpop_idx == i], bins=self.bins)[0]
         self.params = generation.params
         self.t = generation.t
         self.N = generation.get_N()
@@ -874,19 +952,20 @@ class GenSubpopArr:
             sub.plot(b, self.arr[:, i], color=c[i], linewidth=2)
         ymax = self.params.K * 1.3 * Const.bin_size
         title = "t = " + str(self.t) + " N = " + str(self.N)
-        sub = setup_space_plot(sub, ymax, "subpop density", title)
+        sub = plot_util.setup_space_plot(sub, ymax, "subpop density", title)
         plt.legend(["N", "Hyb"] + Const.subpop_legend, fontsize=8,
                    bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
         fig.show()
         return fig
 
 
-class SubpopArr:
+class SubpopArr(SubpopArrType):
     time_axis = 0
     space_axis = 1
     subpop_axis = 2
 
-    def __init__(self, arr, params):
+    def __init__(self, arr, params, bin_size = 0.01):
+        super().__init__(bin_size)
         self.arr = arr
         self.params = params
         self.t_vec = np.arange(np.shape(arr)[0])
@@ -917,13 +996,19 @@ class SubpopArr:
         self.arr[t, :, :] = GenSubpopArr(generation).arr
 
 
-class GenAlleleArr:
+class AlleleArrType(Histograms):
+
+    dtype = np.int32
+
+
+class GenAlleleArr(AlleleArrType):
     space_axis = 0
     locus_axis = 1
     allele_axis = 2
 
-    def __init__(self, arr):
+    def __init__(self, arr, bin_size = 0.01):
         self.arr = arr
+        Histograms.__init__(self, bin_size)
 
     @classmethod
     def from_generation(cls, generation):
@@ -946,21 +1031,29 @@ class GenAlleleArr:
         return cls(arr)
 
     def get_freq(self):
-        N = np.sum(np.sum(self.arr, axis=2), axis=1) / 2
-        return self.arr / N[:, None, None]
+        ### this doesnt look right
+        n_loci = np.sum(np.sum(self.arr, axis=2), axis=1) / 2
+        return self.arr / n_loci[:, None, None]
 
     def plot_freq(self):
         pass
 
 
-class AlleleArr:
+class AlleleArr(AlleleArrType):
     time_axis = 0
     space_axis = 1
     locus_axis = 2
     allele_axis = 3
 
-    def __init__(self, arr):
+    def __init__(self, arr, params, bin_size=0.01):
+        super().__init__(bin_size)
         self.arr = arr
+        self.params = params
+        self.n_alleles = self.get_n_alleles()
+        self.n_organisms = self.get_n_organisms()
+        self._g = np.shape(arr)[0]
+        if self._g != params.g + 1:
+            raise Exception("Parameter and array g do not match!")
 
     @classmethod
     def from_pedigree(cls, pedigree):
@@ -970,38 +1063,46 @@ class AlleleArr:
         for t in t_vec:
             generation = pedigree.get_generation(t)
             arr[t, :, :, :] = GenAlleleArr.from_generation(generation).arr
-        return cls(arr)
+        return cls(arr, pedigree.params)
 
     @classmethod
-    def from_subpoparr(cls, pedigree):
-        t_len = pedigree.g + 1
-        t_vec = np.arange(t_len)
-        arr = np.zeros((t_len, Const.n_bins, 2, 2), dtype=np.int32)
-        for t in t_vec:
-            generation = pedigree.get_generation(t)
-            arr[t, :, :, :] = GenAlleleArr.from_generation(generation).arr
-        return cls(arr)
+    def from_subpoparr(cls, subpoparr):
+        arr = np.sum(subpoparr.arr[:, :, :, None, None]
+                     * Const.allele_manifold, axis=2)
+        return cls(arr, subpoparr.params)
 
+    def __str__(self):
+        return f"AlleleArr holding {self.n_alleles} alleles from " \
+               f"{self.n_organisms} organisms over {self._g} generations"
 
-def setup_space_plot(sub, ymax, ylabel, title):
-    sub.set_xticks(np.arange(0, 1.1, 0.1))
-    sub.set_xlabel("x coordinate")
-    sub.set_ylabel(ylabel)
-    sub.set_ylim(-0.01, ymax)
-    sub.set_xlim(-0.01, 1.01)
-    sub.set_title(title)
-    return sub
+    def __len__(self):
+        """Return the number of generations represented in the array"""
+        return self._g
 
+    def get_n_alleles(self):
+        """Return the total number of alleles held in the array"""
+        return np.sum(self.arr)
 
-def plot_ancestry(pedigree):
-    fig = plt.figure(figsize=Const.plot_size)
-    sub = fig.add_subplot(111)
-    x = pedigree[thisgen, PedStruc.Col.x]
-    sub.plot(x, ancs, color="black", linewidth=2)
-    sub.set_xlim(-0.01, 1.01), sub.set_ylim(-0.01, 1.01)
-    plt.xticks(np.arange(0, 1.1, 0.1))
-    plt.title("Ancestry coefficients after " + str(int(G -g)) + " generations")
+    def get_n_organisms(self):
+        """Return the total number of organisms represented in the array"""
+        return np.sum(self.arr) // 4
+
+    def get_bin_n(self):
+        """Return a vector holding the number of loci represented in each
+        spatial bin
+        """
+        return np.sum(self.arr, axis=3)
+
+    def get_frequencies(self):
+        """Return an array of allele frequencies"""
+        n_loci = self.get_bin_n()
+        return self.arr / n_loci[:, :, :, np.newaxis]
+
 
 
 params = parameters.Params(10000, 10, 0.1)
 gen = Generation.get_founding(params)
+trial = Trial(params)
+subpoparr = SubpopArr.from_pedigree(trial.pedigree)
+allele_arr1 = AlleleArr.from_pedigree(trial.pedigree)
+allele_arr2 = AlleleArr.from_subpoparr(subpoparr)

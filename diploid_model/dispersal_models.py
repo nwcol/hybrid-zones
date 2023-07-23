@@ -92,3 +92,8 @@ class DispersalDist(stats.rv_continuous):
         return (1 - math.exp(-(x ** 2) / 2 / shape ** 2)
                 + math.sqrt(math.pi / 2 / shape ** 2) * x
                 * erfc(x / math.sqrt(2 * shape ** 2)))
+
+
+dispersal_model_dict = {"random": random_dispersal,
+                        "scale" : scale_dispersal,
+                        "shift" : shift_dispersal}

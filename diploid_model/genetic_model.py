@@ -1,17 +1,19 @@
 import numpy as np
 
-import networkx as nx
+#import networkx as nx
 
 import tskit
 
-# import msprime
+import msprime
 
-from constants import Struc, Const
+import tskit
+
+from constants import Const
 
 import diploid_pop_model as dip
 
 
-class SamplePedigree:
+class SamplePedigree(dip.PedigreeType):
 
     factor = 0.7
 

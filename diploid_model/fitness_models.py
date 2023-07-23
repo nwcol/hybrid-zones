@@ -2,8 +2,6 @@ import numpy as np
 
 import math_fxns
 
-from constants import Struc
-
 
 def intrinsic_fitness(generation, params):
     """Exert the effects of intrinsic fitness on a generation.
