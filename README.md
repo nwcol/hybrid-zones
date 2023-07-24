@@ -4,7 +4,7 @@
 hybzone
 |
 |---diploid.sub
-|---diploid.sh \n
+|---diploid.sh 
 |
 |---diploid
 |   |---__init__.py
