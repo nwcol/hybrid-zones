@@ -1,6 +1,6 @@
 import numpy as np
 
-import math_fxns
+from diploid import math_fxns
 
 
 def gaussian(x, m_x_vec, pref_vec, bound, params):

@@ -11,8 +11,8 @@ def random_dispersal(generation, params):
     """Draw a set of displacements for the generation from a normal
     distribution with mean 0 and standard deviation delta.
     """
-    N = generation.get_N()
-    delta = np.random.normal(loc=0, scale=params.delta, size=N)
+    n = generation.get_n_organisms()
+    delta = np.random.normal(loc=0, scale=params.delta, size=n)
     return delta
 
 
@@ -22,16 +22,17 @@ def scale_dispersal(generation, params):
     Females sample dispersals from normal distributions with std params.delta.
     Males check the signal
     """
-    N = generation.get_N()
-    F = generation.get_F()
-    M = N - F
+    n_females = generation.get_n_females()
+    n_males = generation.get_n_males()
+    n = n_females + n_males
     f_idx, m_idx = generation.get_sex_indices()
-    delta = np.zeros(N, dtype=np.float32)
-    delta[f_idx] = np.random.normal(loc=0.0, scale=params.delta, size=F)
+    delta = np.zeros(n, dtype=np.float32)
+    delta[f_idx] = np.random.normal(loc=0.0, scale=params.delta,
+                                    size=n_females)
     prop, hyb_idx = generation.get_signal_props([-params.bound, params.bound])
     scale = scale_func(prop, params)
     scale[hyb_idx] = params.delta
-    delta[m_idx] = np.random.normal(loc=0, scale=scale, size=M)
+    delta[m_idx] = np.random.normal(loc=0, scale=scale, size=n_males)
     return delta
 
 
@@ -47,17 +48,18 @@ def scale_func(prop, params):
 
 def shift_dispersal(generation, params):
     """Get a vector of dispersal distances using the shift model"""
-    N = generation.get_N()
-    F = generation.get_F()
-    M = N - F
+    n_females = generation.get_n_females()
+    n_males = generation.get_n_males()
+    n = n_females + n_males
     f_idx, m_idx = generation.get_sex_indices()
-    delta = np.zeros(N, dtype=np.float32)
-    delta[f_idx] = np.random.normal(loc=0.0, scale=params.delta, size=F)
+    delta = np.zeros(n, dtype=np.float32)
+    delta[f_idx] = np.random.normal(loc=0.0, scale=params.delta,
+                                    size=n_females)
     l_prop, hyb_idx = generation.get_signal_props([-params.bound, 0])
     r_prop, hyb_idx = generation.get_signal_props([0, params.bound])
     loc = loc_func(l_prop, r_prop, params)
     loc[hyb_idx] = 0
-    delta[m_idx] = np.random.normal(loc=loc, scale=params.delta, size=M)
+    delta[m_idx] = np.random.normal(loc=loc, scale=params.delta, size=n_males)
     return delta
 
 

@@ -6,13 +6,11 @@ import json
 
 import numpy as np
 
-import scipy
-
 import matplotlib.pyplot as plt
 
-import math_fxns
+from diploid import math_fxns
 
-import plot_util
+from diploid import plot_util
 
 plt.rcParams['figure.dpi'] = 400
 
@@ -187,6 +185,7 @@ class Params:
         """
         file = open(filename, 'r')
         param_dict = json.load(file)
+        file.close()
         params = cls(param_dict["K"], param_dict["g"], param_dict["c"])
         for param in param_dict:
             setattr(params, param, param_dict[param])
@@ -210,14 +209,15 @@ class Params:
         return out
 
     def save(self, filename):
-        """Write a dictionary representation of the params class instance as
+        """Write a dictionary representation of the params class instance in
         a .json file
         """
         param_dict = vars(self)
         filename = "param_files/" + filename
         file = open(filename, 'w')
         json.dump(param_dict, file, indent=0)
-        print("params file written")
+        file.close()
+        print("params file written to " + filename)
 
     def parse(self):
         """Check to make sure that parameters stored as lists are the proper
