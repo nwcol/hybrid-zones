@@ -17,9 +17,8 @@ hybzone
 |   |---plot_util.py
 |   |---math_fxns.py
 |   |---constants.py
-|   
+|   |---parameters
+|       |---various params .json files
+|       |---...
+|  
 |---scripts
-|
-|---parameters
-|   |---various params .json files
-    |---...
