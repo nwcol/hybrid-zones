@@ -8,8 +8,6 @@ import msprime
 
 import tskit
 
-from constants import Const
-
 from diploid import pop_model
 
 
@@ -25,10 +23,9 @@ class SamplePedigree(pop_model.PedigreeLike):
     factor = 0.7
 
     def __init__(self, pedigree, params):
-        super().__init__()
         self.max = int(pedigree.get_total_N() * self.factor)
-        self.arr = np.zeros((self.max, self.n_cols))
-        self.params = params
+        arr = np.zeros((self.max, self.n_cols))
+        super().__init__(arr, params)
         self.g0 = 0
         self.g = params.g
         self.t = self.g
@@ -444,9 +441,7 @@ class SampleGen(pop_model.PedigreeLike):
     """Class of sample generations drawn from sample pedigrees"""
 
     def __init__(self, arr, params, t):
-        super().__init__()
-        self.arr = arr
-        self.params = params
+        super().__init__(arr, params)
         self.t = t
 
     @classmethod

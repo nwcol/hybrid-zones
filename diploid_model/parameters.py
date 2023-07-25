@@ -198,15 +198,30 @@ class Params:
             setattr(params, field, param_dict[field])
         return params
 
+    @classmethod
+    def from_string(cls, string):
+        "Convert a string into a params instance"
+        param_dict = eval(string[1:])
+        params = cls.from_dict(param_dict)
+        return params
+
     def __str__(self):
         return f"Parameters: K = {self.K}, N = {self.N}, g = {self.g}, \
                 c = {self.c} with {self.pref_model} model."
 
     def __repr__(self):
-        out = f"Params({self.K}, {self.g}, {self.c}) \n \
-            h"
-        # details
-        return out
+        prototype = Params(10_000, 10, 0.1)
+        proto_dict = dict(vars(prototype))
+        self_dict = dict(vars(self))
+        difs = []
+        for parameter in self_dict:
+            if self_dict[parameter] != proto_dict[parameter]:
+                if parameter not in ["K", "g", 'c']:
+                    difs.append(parameter)
+        string = ""
+        for dif in difs:
+            string += f"params.{dif} = {self_dict[dif]} \n"
+        return f"Params({self.K}, {self.g}, {self.c}) \n" + string
 
     def save(self, filename):
         """Write a dictionary representation of the params class instance in
