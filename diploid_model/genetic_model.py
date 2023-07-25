@@ -243,16 +243,17 @@ class AbbrevSamplePedigree(pop_model.AbbrevPedigree):
             parent_idx = np.unique(old_sample[:, self._parents]).astype(
                 np.int32)
             parent_idx = np.delete(parent_idx, np.where(parent_idx[:] == -1))
-            gen_sample = pedigree.arr[parent_idx]
+            gen_sample = abbrev_pedigree.arr[parent_idx]
             self.k0 = self.k1
             self.k1 += len(gen_sample)
             self.enter_sample(gen_sample)
         self.trim_pedigree()
         self.sort_by_id()
         ### needs work
-        old_ids = self.arr[:, self._i].astype(np.int32)
-        new_ids = np.arange(self.get_n_organisms(), dtype=np.int32)
-        self.arr[:, self._i] = new_ids
+        old_ids = np.arange(self.k1, dtype=np.int32)
+        new_ids = np.arange(len(self), dtype=np.int32)
+        # id'd by position
+        # self.arr[:, self._i] = new_ids
         for i in [4, 5]:
             self.arr[self.arr[:, i] != -1, i] = self.remap_ids(
                 self.arr[:, i], old_ids, new_ids)
@@ -262,17 +263,18 @@ class AbbrevSamplePedigree(pop_model.AbbrevPedigree):
         """Sample n organisms in n_sample_bins bins from the most recent
         generation of a Pedigree instance
         """
-        last_g = np.min(abbrev_pedigree.arr[:, self._t])
         generation_0 = abbrev_pedigree.last_gen
         x = generation_0.get_x()
-        sample_ids = []
-        for range in self.sample_ranges:
-            idx = np.where((x > range[0]) & (x < range[1]))[0]
+        gen_sample_ids = []
+        for zone in self.sample_ranges:
+            idx = np.where((x > zone[0]) & (x < zone[1]))[0]
             sample_idx = np.random.choice(idx, self.params.sample_n,
                                           replace=False)
-            sample_ids.append(sample_idx)
-        sample_ids = np.concatenate(sample_ids)
-        gen_0_sample = generation_0.arr[sample_ids]
+            gen_sample_ids.append(sample_idx)
+        gen_sample_ids = np.concatenate(gen_sample_ids)
+        # sample_ids are indices in generation_0. translate to the whole arr.
+        sample_ids = gen_sample_ids + abbrev_pedigree.get_min_gen_0_id()
+        gen_0_sample = abbrev_pedigree.arr[sample_ids]
         return gen_0_sample
 
     def enter_sample(self, gen_sample):
@@ -643,14 +645,25 @@ class UnrootedMultiWindow(MultiWindow):
         return pi, pi_XY
 
 
+params = pop_model.Params(10_000, 30, 0.1)
+trial = pop_model.Trial(params)
+sample = SamplePedigree.from_trial(trial)
+multi_window = RootedMultiWindow(sample)
 
-
-params = pop_model.params
-sample = SamplePedigree.from_trial(pop_model.trial)
+"""
+params = pop_model.Params(10_000, 30, 0.1)
+params.history_type = "AbbrevPedigree"
+trial = pop_model.Trial(params)
+abbrev_pedigree = trial.abbrev_pedigree
+sample = AbbrevSamplePedigree.from_trial(trial)
+"""
+"""
 multi_window = MultiWindow(params)
+
 sample_gen = SampleGen.from_sample_pedigree(sample, t=0)
 multi_window.get_sample_sets(sample_gen)
 sample_sets = multi_window.sample_sets
 tc = sample.get_tc()
 ts = explicit_coalescent(tc, params)
 ts = reconstructive_coalescent(ts, params)
+"""

@@ -811,6 +811,10 @@ class AbbrevPedigree:
         file.close()
         return cls(arr, params)
 
+    def __len__(self):
+        """Return the number of organisms in self.arr"""
+        return len(self.arr)
+
     def save_txt(self, filename):
         """Save the pedigree array as a .txt document with the params
         attribute as a string header
@@ -870,6 +874,15 @@ class AbbrevPedigree:
         """Return the total number of organisms recorded in the pedigree"""
         return np.shape(self.arr)[0]
 
+    def get_idx_at_t(self, t):
+        """Return the indices at which organisms from time t exist"""
+        return np.where(self.arr[:, self._t] == t)
+
+    def get_min_gen_0_id(self):
+        """Return the index of the first organism in generation 0"""
+        t0_idx = self.get_idx_at_t(t=0)
+        return np.min(t0_idx)
+
 
 class Trial:
 
@@ -900,7 +913,7 @@ class Trial:
     def get_pedigree(self):
         print("simulation initiated @ " + self.get_time_string())
         self.time_vec[self.params.g] = 0
-        generation = Generation.get_founding(params)
+        generation = Generation.get_founding(self.params)
         i1 = generation.sort_by_x_and_id(self.i0)
         self.update_i(i1)
         if self.plot_int:
@@ -917,7 +930,7 @@ class Trial:
 
     def get_abbrev_pedigree(self):
         print("simulation initiated @ " + self.get_time_string())
-        generation = Generation.get_founding(params)
+        generation = Generation.get_founding(self.params)
         i1 = generation.sort_by_x_and_id(self.i0)
         self.update_i(i1)
         self.abbrev_pedigree.save_first_gen(generation)
@@ -937,7 +950,7 @@ class Trial:
 
     def get_subpop_arr(self):
         print("simulation initiated @ " + self.get_time_string())
-        generation = Generation.get_founding(params)
+        generation = Generation.get_founding(self.params)
         generation.sort_by_x_and_id(self.i0)
         self.time_vec[self.params.g] = 0
         if self.plot_int:
@@ -1538,7 +1551,7 @@ class MatingHistograms:
         fig0.suptitle("Female fecundities")
         fig0.show()
 
-
+"""
 params = Params(10000, 10, 0.1)
 gen = Generation.get_founding(params)
 trial = Trial(params)
@@ -1547,7 +1560,6 @@ allele_arr1 = AlleleArr.from_pedigree(trial.pedigree)
 allele_arr2 = AlleleArr.from_subpoparr(subpoparr)
 hist = MatingHistograms.from_pedigree(trial.pedigree)
 
-hist.get_statistics()
 
 males = hist.pairing_hist[:, 1, :, :]
 males1 = np.sum(males, axis=0)
@@ -1564,3 +1576,4 @@ sub.plot(x, males1, "black")
 sub.plot(x, poisson_histogram1, "red")
 sub.plot(x, poisson_histogram2, "blue")
 fig.show()
+"""
