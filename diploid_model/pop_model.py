@@ -1153,6 +1153,30 @@ class SubpopArr(SubpopArrType):
         t = generation.t()
         self.arr[t, :, :] = GenSubpopArr.from_generation(generation).arr
 
+    def get_generation_populations(self):
+        """Return a vector of the populations of each generation"""
+        return np.sum(np.sum(self.arr, axis=1), axis=1)
+
+    def plot_history(self, log=True):
+        n_vec = self.get_generation_populations()
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        sub.plot(self.t_vec, n_vec, color="black")
+        for i in np.arange(9):
+            sub.plot(self.t_vec, np.sum(self.arr[:, :, i], axis=1),
+                     color=Const.subpop_colors[i], linewidth=2)
+        sub.set_xlim(0, np.max(self.t_vec))
+        sub.invert_xaxis()
+        if log:
+            sub.set_yscale("log")
+        else:
+            y_lim = np.round(self.params.K * 1.1)
+            sub.set_ylim(0, y_lim)
+        sub.set_xlabel("t before present")
+        sub.set_ylabel("population size")
+        sub.legend(["N"] + Const.subpop_legend, fontsize=8)
+        fig.show()
+
 
 class AlleleArrType(Histograms):
 
@@ -1551,7 +1575,7 @@ class MatingHistograms:
         fig0.suptitle("Female fecundities")
         fig0.show()
 
-"""
+
 params = Params(10000, 10, 0.1)
 gen = Generation.get_founding(params)
 trial = Trial(params)
@@ -1560,20 +1584,3 @@ allele_arr1 = AlleleArr.from_pedigree(trial.pedigree)
 allele_arr2 = AlleleArr.from_subpoparr(subpoparr)
 hist = MatingHistograms.from_pedigree(trial.pedigree)
 
-
-males = hist.pairing_hist[:, 1, :, :]
-males1 = np.sum(males, axis=0)
-males1 = np.sum(males1, axis=0)
-n = int(np.sum(males1))
-x = np.arange(10)
-poisson1 = np.random.poisson(lam=1, size=n)
-poisson_histogram1 = np.histogram(poisson1, bins = 10, range=[0,10])[0]
-poisson2 = np.random.poisson(lam=0.86, size=n)
-poisson_histogram2 = np.histogram(poisson2, bins = 10, range=[0,10])[0]
-fig = plt.figure(figsize=(8,6))
-sub = fig.add_subplot(111)
-sub.plot(x, males1, "black")
-sub.plot(x, poisson_histogram1, "red")
-sub.plot(x, poisson_histogram2, "blue")
-fig.show()
-"""
