@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 import matplotlib.colors as colors
 
-import tabulate
+import scipy.optimize as opt
 
 from diploid import mating_models
 
@@ -24,6 +24,129 @@ from diploid import plot_util
 
 plt.rcParams['figure.dpi'] = 100
 matplotlib.use('Qt5Agg')
+
+
+class Trial:
+
+    def __init__(self, params, plot_int=None):
+        self.time0 = time.time()
+        self.t = params.g
+        self.i0 = 0
+        self.i1 = 0
+        self.complete = False
+        self.params = params
+        self.time_vec = np.zeros(params.g + 1)
+        self.report_int = max(min(100, self.params.g // 10), 1)
+        self.plot_int = plot_int
+        self.figs = []
+        self.type = params.history_type
+        if self.type == "Pedigree":
+            self.pedigree = Pedigree.new(params)
+            self.get_pedigree()
+        elif self.type == "AbbrevPedigree":
+            self.abbrev_pedigree = AbbrevPedigree.new(params)
+            self.get_abbrev_pedigree()
+        elif self.type == "SubpopArr":
+            self.subpop_arr = SubpopArr.initialize(params)
+            self.get_subpop_arr()
+        else:
+            raise Exception(f"{self.type} is not a valid history type!")
+
+    def get_pedigree(self):
+        print("simulation initiated @ " + self.get_time_string())
+        self.time_vec[self.params.g] = 0
+        generation = Generation.get_founding(self.params)
+        i1 = generation.sort_by_x_and_id(self.i0)
+        self.update_i(i1)
+        if self.plot_int:
+            self.figs.append(generation.plot_subpops())
+        while self.t > 0:
+            self.pedigree.enter_gen(generation, self.i0, self.i1, flag=0)
+            generation = self.cycle(generation)
+        self.pedigree.enter_gen(generation, self.i0, self.i1, flag=1)
+        self.pedigree.trim(self.i1)
+        if self.plot_int:
+            for fig in self.figs:
+                fig.show()
+        print("simulation complete")
+
+    def get_abbrev_pedigree(self):
+        print("simulation initiated @ " + self.get_time_string())
+        generation = Generation.get_founding(self.params)
+        i1 = generation.sort_by_x_and_id(self.i0)
+        self.update_i(i1)
+        self.abbrev_pedigree.save_first_gen(generation)
+        self.time_vec[self.params.g] = 0
+        if self.plot_int:
+            self.figs.append(generation.plot_subpops())
+        while self.t > 0:
+            self.abbrev_pedigree.enter_gen(generation, self.i0, self.i1)
+            generation = self.cycle(generation)
+        self.abbrev_pedigree.enter_gen(generation, self.i0, self.i1)
+        self.abbrev_pedigree.save_last_gen(generation)
+        self.abbrev_pedigree.trim(self.i1)
+        if self.plot_int:
+            for fig in self.figs:
+                fig.show()
+        print("simulation complete")
+
+    def get_subpop_arr(self):
+        print("simulation initiated @ " + self.get_time_string())
+        generation = Generation.get_founding(self.params)
+        generation.sort_by_x_and_id(self.i0)
+        self.time_vec[self.params.g] = 0
+        if self.plot_int:
+            self.figs.append(generation.plot_subpops())
+        while self.t > 0:
+            self.subpop_arr.enter_generation(generation)
+            generation = self.cycle(generation)
+            if self.t == 0:
+                self.complete = True
+        self.subpop_arr.enter_generation(generation)
+        if self.plot_int:
+            for fig in self.figs:
+                fig.show()
+        print("simulation complete")
+
+    def cycle(self, generation):
+        self.update_t()
+        old_generation = generation
+        old_generation.remove_dead()
+        generation = old_generation.mate(old_generation, self.params)
+        generation.disperse(self.params)
+        generation.fitness(self.params)
+        i1 = generation.sort_by_x_and_id(self.i1)
+        self.update_i(i1)
+        self.report()
+        if self.plot_int:
+            if self.t % self.plot_int == 0:
+                self.figs.append(generation.plot_subpops())
+        return generation
+
+    def update_i(self, i1):
+        """Update the upper and lower indices to appropriate new values"""
+        self.i0 = self.i1
+        self.i1 = i1
+
+    def update_t(self):
+        self.t -= 1
+        if self.t == 0:
+            self.complete = True
+
+    def report(self):
+        self.time_vec[self.t] = time.time() - self.time0
+        if self.t % self.report_int == 0:
+            t = self.time_vec[self.t]
+            t_last = self.time_vec[self.t + self.report_int]
+            mean_t = str(np.round((t - t_last) / self.report_int, 3))
+            run_t = str(np.round(self.time_vec[self.t], 2))
+            time_string = self.get_time_string()
+            print(f"g{self.t : > 6} complete, runtime = {run_t : >8}"
+                  + f" s, averaging {mean_t : >8} s/gen, @ {time_string :>8}")
+
+    @staticmethod
+    def get_time_string():
+        return str(time.strftime("%H:%M:%S", time.localtime()))
 
 
 class PedigreeLike:
@@ -533,13 +656,13 @@ class Generation(PedigreeLike):
         self.arr = np.delete(self.arr, self.get_dead_idx(), axis=0)
 
     def plot_subpops(self):
-        gen_subpop_arr = GenSubpopArr(self, self.params)
-        fig = gen_subpop_arr.density_plot()
+        gen_subpop_arr = SubpopArr.from_generation(self)
+        fig = gen_subpop_arr.plot_density()
         return fig
 
     def plot_allele_freqs(self):
-        gen_allele_arr = GenSubpopArr.from_generation(self)
-        fig = gen_allele_arr.allele_freq_plot()
+        gen_allele_arr = AlleleArr.from_generation(self)
+        fig = gen_allele_arr.plot_freq()
         return fig
 
 
@@ -664,6 +787,10 @@ class Pedigree(PedigreeLike):
         file.close()
         return cls(arr, params)
 
+    def __repr__(self):
+        return (f"Pedigree with size {self.get_n_organisms()} in {self.g + 1} "
+                "generations")
+
     def save_txt(self, filename):
         """Save the pedigree array as a .txt document with the params
         attribute as a string header
@@ -778,13 +905,14 @@ class AbbrevPedigree:
     character_axis = 1
     dtype = np.int32
     adjust_fac = 1.01
-    n_cols = 4
-    _t = 0
-    _mat_id = 1
-    _pat_id = 2
+    n_cols = 5
+    _id = 0
+    _t = 1
+    _mat_id = 2
+    _pat_id = 3
     _subpop_code = 4
-    _parents = [1, 2]
-    map = np.array([3, 4, 5])
+    _parents = [2, 3]
+    map = np.array([1, 3, 4, 5])
 
     def __init__(self, arr, params, max = None):
         self.arr = arr
@@ -841,8 +969,8 @@ class AbbrevPedigree:
         self.t = generation.t
 
     def insert_gen(self, generation, i0, i1):
-        self.arr[i0:i1, :3] = generation.arr[:, self.map]
-        self.arr[i0:i1, 3] = generation.get_subpop_idx()
+        self.arr[i0:i1, :self._subpop_code] = generation.arr[:, self.map]
+        self.arr[i0:i1, self._subpop_code] = generation.get_subpop_idx()
 
     def expand(self):
         """expand the pedigree to accommodate more organisms"""
@@ -883,235 +1011,67 @@ class AbbrevPedigree:
         t0_idx = self.get_idx_at_t(t=0)
         return np.min(t0_idx)
 
+    def get_parents(self):
+        """Return the two parent id columns of the array"""
+        return self.arr[:, self._parents]
 
-class Trial:
+    def get_subpops(self):
+        """Return the genotype code column"""
+        return self.arr[:, self._subpop_code]
 
-    def __init__(self, params, plot_int=None):
-        self.time0 = time.time()
-        self.t = params.g
-        self.i0 = 0
-        self.i1 = 0
-        self.complete = False
-        self.params = params
-        self.time_vec = np.zeros(params.g + 1)
-        self.report_int = max(min(100, self.params.g // 10), 1)
-        self.plot_int = plot_int
-        self.figs = []
-        self.type = params.history_type
-        if self.type == "Pedigree":
-            self.pedigree = Pedigree.new(params)
-            self.get_pedigree()
-        elif self.type == "AbbrevPedigree":
-            self.abbrev_pedigree = AbbrevPedigree.new(params)
-            self.get_abbrev_pedigree()
-        elif self.type == "SubpopArr":
-            self.subpop_arr = SubpopArr.new(params)
-            self.get_subpop_arr()
-        else:
-            raise Exception(f"{self.type} is not a valid history type!")
-
-    def get_pedigree(self):
-        print("simulation initiated @ " + self.get_time_string())
-        self.time_vec[self.params.g] = 0
-        generation = Generation.get_founding(self.params)
-        i1 = generation.sort_by_x_and_id(self.i0)
-        self.update_i(i1)
-        if self.plot_int:
-            self.figs.append(generation.plot_subpops())
-        while self.t > 0:
-            self.pedigree.enter_gen(generation, self.i0, self.i1, flag=0)
-            generation = self.cycle(generation)
-        self.pedigree.enter_gen(generation, self.i0, self.i1, flag=1)
-        self.pedigree.trim(self.i1)
-        if self.plot_int:
-            for fig in self.figs:
-                fig.show()
-        print("simulation complete")
-
-    def get_abbrev_pedigree(self):
-        print("simulation initiated @ " + self.get_time_string())
-        generation = Generation.get_founding(self.params)
-        i1 = generation.sort_by_x_and_id(self.i0)
-        self.update_i(i1)
-        self.abbrev_pedigree.save_first_gen(generation)
-        self.time_vec[self.params.g] = 0
-        if self.plot_int:
-            self.figs.append(generation.plot_subpops())
-        while self.t > 0:
-            self.abbrev_pedigree.enter_gen(generation, self.i0, self.i1)
-            generation = self.cycle(generation)
-        self.abbrev_pedigree.enter_gen(generation, self.i0, self.i1)
-        self.abbrev_pedigree.save_last_gen(generation)
-        self.abbrev_pedigree.trim(self.i1)
-        if self.plot_int:
-            for fig in self.figs:
-                fig.show()
-        print("simulation complete")
-
-    def get_subpop_arr(self):
-        print("simulation initiated @ " + self.get_time_string())
-        generation = Generation.get_founding(self.params)
-        generation.sort_by_x_and_id(self.i0)
-        self.time_vec[self.params.g] = 0
-        if self.plot_int:
-            self.figs.append(generation.plot_subpops())
-        while self.t > 0:
-            self.subpop_arr.enter_generation(generation)
-            generation = self.cycle(generation)
-            if self.t == 0:
-                self.complete = True
-        self.subpop_arr.enter_generation(generation)
-        if self.plot_int:
-            for fig in self.figs:
-                fig.show()
-        print("simulation complete")
-
-    def cycle(self, generation):
-        self.update_t()
-        old_generation = generation
-        old_generation.remove_dead()
-        generation = old_generation.mate(old_generation, self.params)
-        generation.disperse(self.params)
-        generation.fitness(self.params)
-        i1 = generation.sort_by_x_and_id(self.i1)
-        self.update_i(i1)
-        self.report()
-        if self.plot_int:
-            if self.t % self.plot_int == 0:
-                self.figs.append(generation.plot_subpops())
-        return generation
-
-    def update_i(self, i1):
-        """Update the upper and lower indices to appropriate new values"""
-        self.i0 = self.i1
-        self.i1 = i1
-
-    def update_t(self):
-        self.t -= 1
-        if self.t == 0:
-            self.complete = True
-
-    def report(self):
-        self.time_vec[self.t] = time.time() - self.time0
-        if self.t % self.report_int == 0:
-            t = self.time_vec[self.t]
-            t_last = self.time_vec[self.t + self.report_int]
-            mean_t = str(np.round((t - t_last) / self.report_int, 3))
-            run_t = str(np.round(self.time_vec[self.t], 2))
-            time_string = self.get_time_string()
-            print(f"g{self.t : > 6} complete, runtime = {run_t : >8}"
-                  + f" s, averaging {mean_t : >8} s/gen, @ {time_string :>8}")
-
-    @staticmethod
-    def get_time_string():
-        return str(time.strftime("%H:%M:%S", time.localtime()))
+    def get_t(self):
+        """Return the time column"""
+        return self.arr[:, self._t]
 
 
-class Histograms:
-    """The superclass of class which use histograms to record genotype/subpop
-    and allele densities or frequencies.
-    """
-
-    def __init__(self, bin_size):
-        self.bin_size = bin_size
-        self.n_bins = int(1 / bin_size)
-        self.bins = np.linspace(0, 1, self.n_bins + 1)
-        self.bins_left = np.linspace(0, 1 - bin_size, self.n_bins)
-        self.bins_right = np.linspace(bin_size, 1, self.n_bins)
-        h_bin_size = bin_size / 2
-        self.bins_mid = np.linspace(h_bin_size, 1 - h_bin_size, self.n_bins)
-
-
-class SubpopArrType(Histograms):
-    """The superclass defining the structure of generation- and pedigree-scale
-    subpopulation arrays, which record histograms of subpopulation densities
-    throughout time, and the methods common to them.
-    """
-    dtype = np.int32
-
-
-class GenSubpopArr(SubpopArrType):
-    space_axis = 0
-    subpop_axis = 1
-
-    def __init__(self, arr, params, t, bin_size):
-        super().__init__(bin_size)
-        self.arr = arr
-        self.params = params
-        self.t = t
-
-    @classmethod
-    def from_generation(cls, generation, bin_size=0.01):
-        arr = np.zeros((Const.n_bins, Const.n_subpops), dtype=np.int32)
-        x = generation.get_x()
-        subpop_idx = generation.get_subpop_idx()
-        bins = np.linspace(0, 1, int(1 / bin_size) + 1)
-        for i in np.arange(9):
-            arr[:, i] = np.histogram(x[subpop_idx == i], bins=bins)[0]
-        return cls(arr, generation.params, generation.t, bin_size)
-
-    def __len__(self):
-        """Get the number of organisms recorded in the array"""
-        return np.sum(self.arr)
-
-    def get_n_vec(self):
-        """Return a vector of whole-population bin densities"""
-        return np.sum(self.arr, axis=1)
-
-    def get_subpop_n_vec(self):
-        return np.sum(self.arr, axis=0)
-
-    def get_n_hyb_vec(self):
-        return np.sum(self.arr[:, 1:8], axis=1)
-
-    def density_plot(self):
-        """Make a plot of the densities of each subpopulation across space"""
-        fig = plt.figure(figsize=Const.plot_size)
-        sub = fig.add_subplot(111)
-        b = Const.bins_mid
-        n_vec = self.get_n_vec()
-        sub.plot(b, n_vec, color="black", linestyle='dashed', linewidth=2)
-        sub.plot(b, self.get_n_hyb_vec(), color='green', linestyle='dashed',
-                 linewidth=2)
-        c = Const.subpop_colors
-        for i in np.arange(9):
-            sub.plot(b, self.arr[:, i], color=c[i], linewidth=2)
-        ymax = self.params.K * 1.3 * Const.bin_size
-        title = "t = " + str(self.t) + " n = " + str(len(self))
-        sub = plot_util.setup_space_plot(sub, ymax, "subpop density", title)
-        plt.legend(["N", "Hyb"] + Const.subpop_legend, fontsize=8,
-                   bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
-        fig.show()
-        return fig
-
-
-class SubpopArr(SubpopArrType):
+class SubpopArr:
     time_axis = 0
     space_axis = 1
     subpop_axis = 2
 
-    def __init__(self, arr, params, bin_size = 0.01):
-        super().__init__(bin_size)
+    def __init__(self, arr, params, t_now, bin_size):
         self.arr = arr
         self.params = params
-        self.t_vec = np.arange(np.shape(arr)[0])
+        self.t = t_now
+        self.bin_size = bin_size
         self.g = params.g
 
     @classmethod
-    def new(cls, params):
-        length = params.g + 1
-        arr = np.zeros((length, Const.n_bins, Const.n_subpops), dtype=np.int32)
-        return cls(arr, params)
+    def initialize(cls, params, bin_size=0.01):
+        n_bins = get_n_bins(bin_size)
+        t_dim = params.g + 1
+        arr = np.zeros((t_dim, n_bins, PedigreeLike.n_subpops), dtype=np.int32)
+        return cls(arr, params, t_dim, bin_size)
 
     @classmethod
-    def from_pedigree(cls, pedigree):
-        t_vec = np.arange(pedigree.g + 1)
-        t_len = pedigree.g + 1
-        arr = np.zeros((t_len, Const.n_bins, Const.n_subpops), dtype=np.int32)
-        for t in t_vec:
+    def from_generation(cls, generation, bin_size=0.01):
+        """Get a SubpopArr of time dimension 1, recording a single generation
+        """
+        bin_edges, n_bins = get_bins(bin_size)
+        n_subpops = generation.n_subpops
+        arr = np.zeros((1, n_bins, n_subpops), dtype=np.int32)
+        x = generation.get_x()
+        subpop_idx = generation.get_subpop_idx()
+        for i in np.arange(n_subpops):
+            arr[0, :, i] = np.histogram(x[subpop_idx == i], bins=bin_edges)[0]
+        params = generation.params
+        t = generation.t
+        return cls(arr, params, t, bin_size)
+
+    @classmethod
+    def from_pedigree(cls, pedigree, bin_size=0.01):
+        """Get a SubpopArr recording population densities in a Pedigree of
+        time dimension pedigree.g + 1
+        """
+        n_bins = get_n_bins(bin_size)
+        t_dim = pedigree.g + 1
+        arr = np.zeros((t_dim, n_bins, pedigree.n_subpops), dtype=np.int32)
+        for t in np.arange(pedigree.g + 1):
             generation = pedigree.get_generation(t)
-            arr[t, :, :] = GenSubpopArr.from_generation(generation).arr
-        return cls(arr, pedigree.params)
+            arr[t, :, :] = SubpopArr.from_generation(generation).arr[0]
+        params = pedigree.params
+        t_now = 0
+        return cls(arr, params, t_now, bin_size)
 
     @classmethod
     def load_txt(cls, filename):
@@ -1121,10 +1081,13 @@ class SubpopArr(SubpopArrType):
         raw_arr = np.loadtxt(file, dtype=np.int32)
         file.close()
         shape = np.shape(raw_arr)
+        t_dim = shape[0]
         n_subpops = PedigreeLike.n_subpops
-        new_shape = (shape[0], shape[1] // n_subpops, n_subpops)
+        bin_size = shape[1] // n_subpops
+        new_shape = (t_dim, bin_size, n_subpops)
         arr = np.reshape(raw_arr, new_shape)
-        return cls(arr, params)
+        t_now = 0
+        return cls(arr, params, 0, bin_size)
 
     def __str__(self):
         """Return a description of the SubpopArr instance"""
@@ -1138,34 +1101,75 @@ class SubpopArr(SubpopArrType):
         """Return the generation/s represented at idx"""
         return self.arr[idx]
 
+    def enter_generation(self, generation):
+        t = generation.t
+        self.arr[t, :, :] = SubpopArr.from_generation(generation).arr[0]
+
     def save_txt(self, filename):
         """Reshape the array such that it's 2d and save it as a .txt file"""
         shape = np.shape(self.arr)
         reshaped = self.arr.reshape(shape[0], shape[1] * shape[2])
         file = open(filename, 'w')
-        header = str(vars(params))
+        header = str(vars(self.params))
         np.savetxt(file, reshaped, delimiter=' ', newline='\n', header=header,
                    fmt="%1.1i")
         file.close()
         print("SubpopArr saved at " + filename)
 
-    def enter_generation(self, generation):
-        t = generation.t()
-        self.arr[t, :, :] = GenSubpopArr.from_generation(generation).arr
-
     def get_generation_populations(self):
-        """Return a vector of the populations of each generation"""
+        """Return a vector of the whole populations of each generation"""
         return np.sum(np.sum(self.arr, axis=1), axis=1)
+
+    def get_generation_population(self, t):
+        """Return the whole-population size at generation t"""
+        return np.sum(self.arr[t])
+
+    def get_subpop_n_vec(self, t):
+        """Get a vector of subpopulation sizes at time t"""
+        return np.sum(self.arr[t], axis=0)
+
+    def get_hybrid_densities(self, t):
+        """Compute the sum of densities of the subpopulations with one or more
+        heterozygous loci at generation t
+        """
+        return np.sum(self.arr[t, :, 1:8], axis=1)
+
+    def get_bin_densities(self, t):
+        """Return a vector of whole population bin densities in generation t"""
+        return np.sum(self.arr[t], axis=1)
+
+    def plot_density(self, t=0):
+        """Make a plot of the densities of each subpopulation across space
+        at index (time) t"""
+        fig = plt.figure(figsize=Const.plot_size)
+        sub = fig.add_subplot(111)
+        b = get_bin_mids(self.bin_size)
+        n_vec = self.get_bin_densities(t)
+        sub.plot(b, n_vec, color="black", linestyle='dashed', linewidth=2)
+        sub.plot(b, self.get_hybrid_densities(t), color='green',
+                 linestyle='dashed', linewidth=2)
+        c = Const.subpop_colors
+        for i in np.arange(9):
+            sub.plot(b, self.arr[t, :, i], color=c[i], linewidth=2)
+        y_max = self.params.K * 1.3 * Const.bin_size
+        n = str(self.get_generation_population(t))
+        title = "t = " + str(t) + " n = " + n
+        sub = plot_util.setup_space_plot(sub, y_max, "subpop density", title)
+        plt.legend(["N", "Hyb"] + Const.subpop_legend, fontsize=8,
+                   bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+        fig.show()
+        return fig
 
     def plot_history(self, log=True):
         n_vec = self.get_generation_populations()
         fig = plt.figure(figsize=(8, 6))
         sub = fig.add_subplot(111)
-        sub.plot(self.t_vec, n_vec, color="black")
+        times = np.arange(self.g + 1)
+        sub.plot(times, n_vec, color="black")
         for i in np.arange(9):
-            sub.plot(self.t_vec, np.sum(self.arr[:, :, i], axis=1),
+            sub.plot(times, np.sum(self.arr[:, :, i], axis=1),
                      color=Const.subpop_colors[i], linewidth=2)
-        sub.set_xlim(0, np.max(self.t_vec))
+        sub.set_xlim(0, np.max(times))
         sub.invert_xaxis()
         if log:
             sub.set_yscale("log")
@@ -1178,112 +1182,150 @@ class SubpopArr(SubpopArrType):
         fig.show()
 
 
-class AlleleArrType(Histograms):
+class ClinePars:
 
-    dtype = np.int32
-
-
-class GenAlleleArr(AlleleArrType):
-    space_axis = 0
-    locus_axis = 1
-    allele_axis = 2
-
-    def __init__(self, arr, t, params = None, bin_size = 0.01):
-        Histograms.__init__(self, bin_size)
-        self.arr = arr
-        self.t = t
+    def __init__(self, x_vec, k_vec, params, bin_size):
+        if len(x_vec) != len(k_vec):
+            raise AttributeError("x and k vector lengths do not match")
+        self.x_vec = x_vec
+        self.k_vec = k_vec
         self.params = params
+        self.bin_size = bin_size
 
     @classmethod
-    def from_generation(cls, generation):
-        x = generation.get_x()
-        t = generation.t
-        b = Const.bins
-        alleles = generation.get_alleles()
-        loci = np.array([[0, 1], [0, 1], [2, 3], [2, 3]])
-        arr = np.zeros((Const.n_bins, 2, 2))
-        for i in np.arange(4):
-            j, k = np.unravel_index(i, (2, 2))
-            a = i % 2 + 1
-            arr[:, j, k] = (np.histogram(x[alleles[:, loci[i, 0]] == a], b)[0]
-                          + np.histogram(x[alleles[:, loci[i, 1]] == a], b)[0])
-        return cls(arr, t, generation.params)
+    def from_subpop_arr(cls, subpop_arr):
+        allele_arr = AlleleArr.from_subpop_arr(subpop_arr)
+        return cls.from_allele_arr(allele_arr)
 
     @classmethod
-    def from_subpop_arr(cls, subpoparr, t):
-        factor = Const.allele_manifold
-        arr = np.sum(subpoparr.arr[:, :, None, None] * factor, axis = 1)
-        return cls(arr, t)
+    def from_allele_arr(cls, allele_arr):
+        allele_freq = allele_arr.get_freq()
+        a2_freq = allele_freq[:, :, 0, 1]
+        x = get_bin_mids(allele_arr.bin_size)
+        params = allele_arr.params
+        t_dim = params.g + 1
+        x_vec = np.zeros(t_dim)
+        k_vec = np.zeros(t_dim)
+        for t in np.arange(t_dim):
+            try:
+                cline_opt = cls.optimize_logistic(x, a2_freq[t])
+                k_vec[t] = cline_opt[0][0]
+                x_vec[t] = cline_opt[0][1]
+            except:
+                k_vec[t] = -1
+                x_vec[t] = -1
+        bin_size = allele_arr.bin_size
+        return cls(x_vec, k_vec, params, bin_size)
 
-    def __str__(self):
-        return (f"AlleleArr holding {self.get_n_alleles()} alleles from " 
-                f"{self.get_n_organisms()} organisms")
+    def __len__(self):
+        return len(self.x_vec)
 
-    def get_n_alleles(self):
-        """Return the total number of alleles held in the array"""
-        return np.sum(self.arr)
+    @staticmethod
+    def logistic_fxn(x, k, x_0):
+        return 1 / (1.0 + np.exp(-k * (x - x_0)))
 
-    def get_n_organisms(self):
-        """Return the total number of organisms represented in the array"""
-        return int(np.sum(self.arr) / 4)
+    @classmethod
+    def optimize_logistic(cls, x, y):
+        return opt.curve_fit(cls.logistic_fxn, x, y)
 
-    def get_freq(self):
-        n_loci = np.sum(np.sum(self.arr, axis=2), axis=1) / 2
-        return self.arr / n_loci[:, None, None]
-
-    def plot_allele_freq(self):
-        fig = plt.figure(figsize=Const.plot_size)
-        sub = fig.add_subplot(111)
-        freqs = self.get_freq()
-        for i in np.arange(3, -1, -1):
-            j, k = np.unravel_index(i, (2, 2))
-            sub.plot(self.bins_mid, freqs[:, j, k],
-                     color=Const.allele_colors[i], linewidth=2,
-                     label=Const.allele_legend[i])
-        title = "t = " + str(self.t) + " n = " + str(self.get_n_organisms())
-        sub = plot_util.setup_space_plot(sub, 1.01, "allele freq", title)
-        plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+    def plot(self):
+        length = len(self)
+        t = np.arange(length)
+        fig, axs = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
+        x_ax, k_ax = axs[0], axs[1]
+        k_ax.plot(t, self.k_vec, color="black", linewidth=2)
+        x_ax.plot(t, np.full(length, 0.5), color="red", linestyle="dashed")
+        x_ax.plot(t, self.x_vec, color="black", linewidth=2)
+        k_ax.set_ylim(0, 200)
+        x_ax.set_ylim(0, 1)
+        k_ax.set_xlim(0, length)
+        axs[1].set_xlabel("generations before present")
+        x_ax.set_ylabel("x_0")
+        k_ax.set_ylabel("k")
+        x_ax.set_title("cline parameter x_0")
+        k_ax.set_title("cline parameter k")
+        x_ax.invert_xaxis()
+        fig.suptitle("Cline Parameters")
+        fig.tight_layout(pad=1.0)
         fig.show()
-        return fig
+
+    def plot_clines(self, n=10):
+        """Plot the cline approximation at n even intervals in time"""
+        snaps = np.linspace(len(self) - 1, 0, n, dtype=np.int32)
+        x = get_bin_mids(self.bin_size)
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        colors = matplotlib.cm.YlGnBu(np.linspace(0.2, 1, n))
+        for i in np.arange(n):
+            t = snaps[i]
+            y = self.logistic_fxn(x, self.k_vec[t], self.x_vec[t])
+            sub.plot(x, y, color=colors[i], linewidth=2)
+        sub = plot_util.setup_space_plot(sub, 1.01, "$A^2$ cline", "Clines")
+        sub.legend(snaps)
+        fig.show()
 
 
-class AlleleArr(AlleleArrType):
+class AlleleArr:
     time_axis = 0
     space_axis = 1
     locus_axis = 2
     allele_axis = 3
 
-    def __init__(self, arr, params, bin_size=0.01):
-        super().__init__(bin_size)
+    def __init__(self, arr, params, t_now, bin_size):
         self.arr = arr
         self.params = params
-        self._g = np.shape(arr)[0]
-        if self._g != params.g + 1:
-            raise Exception("Parameter and array g do not match!")
+        self.t = t_now
+        self.bin_size = bin_size
 
     @classmethod
-    def from_pedigree(cls, pedigree):
-        t_len = pedigree.g + 1
-        t_vec = np.arange(t_len)
-        arr = np.zeros((t_len, Const.n_bins, 2, 2), dtype=np.int32)
-        for t in t_vec:
+    def from_generation(cls, generation, bin_size=0.01):
+        """Get an AlleleArr of time dimension 1, recording the allele
+        distribution in a single Generation
+        """
+        x = generation.get_x()
+        bins, n_bins = get_bins(0.01)
+        alleles = generation.get_alleles()
+        loci = np.array([[0, 1], [0, 1], [2, 3], [2, 3]])
+        arr = np.zeros((1, n_bins, 2, 2))
+        for i in np.arange(4):
+            j, k = np.unravel_index(i, (2, 2))
+            a = i % 2 + 1
+            arr[0, :, j, k] = (
+                np.histogram(x[alleles[:, loci[i, 0]] == a], bins)[0]
+                + np.histogram(x[alleles[:, loci[i, 1]] == a], bins)[0])
+        params = generation.params
+        t = generation.t
+        return cls(arr, params, t, bin_size)
+
+    @classmethod
+    def from_pedigree(cls, pedigree, bin_size=0.01):
+        t_dim = pedigree.g + 1
+        arr = np.zeros((t_dim, Const.n_bins, 2, 2), dtype=np.int32)
+        for t in np.arange(t_dim):
             generation = pedigree.get_generation(t)
-            arr[t, :, :, :] = GenAlleleArr.from_generation(generation).arr
-        return cls(arr, pedigree.params)
+            arr[t, :, :, :] = AlleleArr.from_generation(generation).arr
+        params = pedigree.params
+        t_now = pedigree.t
+        return cls(arr, params, t_now, bin_size)
 
     @classmethod
-    def from_subpoparr(cls, subpoparr):
-        arr = np.sum(subpoparr.arr[:, :, :, None, None]
-                     * Const.allele_manifold, axis=2)
-        return cls(arr, subpoparr.params)
+    def from_subpop_arr(cls, subpop_arr):
+        """Convert data from a SubpopArr into an AlleleArr"""
+        fac = Const.allele_manifold
+        arr = np.sum(subpop_arr.arr[:, :, :, None, None] * fac, axis=2)
+        params = subpop_arr.params
+        t = subpop_arr.t
+        bin_size = subpop_arr.bin_size
+        return cls(arr, params, t, bin_size)
 
     def __str__(self):
-        return f"AlleleArr holding {self.get_n_alleles()} alleles from " \
-               f"{self.get_n_organisms()} organisms over {self._g} generations"
+        return (f"AlleleArr holding {self.get_n_alleles()} alleles from "
+                f"{self.get_n_organisms()} organisms over {len(self)}" 
+                "generations")
 
     def __len__(self):
         """Return the number of generations represented in the array"""
-        return self._g
+        return np.shape(self.arr)[0]
 
     def get_n_alleles(self):
         """Return the total number of alleles held in the array"""
@@ -1293,16 +1335,47 @@ class AlleleArr(AlleleArrType):
         """Return the total number of organisms represented in the array"""
         return np.sum(self.arr) // 4
 
+    def get_n_at_t(self, t):
+        """Return the population size of generation t"""
+        return np.sum(self.arr[t]) // 4
+
     def get_bin_n(self):
         """Return a vector holding the number of loci represented in each
         spatial bin
         """
         return np.sum(self.arr, axis=3)
 
-    def get_frequencies(self):
+    def get_bin_n_at_t(self, t):
+        """Return a vector holding the number of loci represented in each
+        spatial bin at time t
+        """
+        return np.sum(self.arr[t, :, :, :], axis=2)
+
+    def get_freq(self):
         """Return an array of allele frequencies"""
         n_loci = self.get_bin_n()
         return self.arr / n_loci[:, :, :, np.newaxis]
+
+    def get_freq_at_t(self, t):
+        """Return an array of allele frequencies at time t"""
+        n_loci = self.get_bin_n()
+        return self.arr[t] / n_loci[t, :, :, np.newaxis]
+
+    def plot_freq(self, t=0):
+        fig = plt.figure(figsize=Const.plot_size)
+        sub = fig.add_subplot(111)
+        freqs = self.get_freq_at_t(t)
+        bin_mids = get_bin_mids(self.bin_size)
+        for i in np.arange(3, -1, -1):
+            j, k = np.unravel_index(i, (2, 2))
+            sub.plot(bin_mids, freqs[:, j, k],
+                     color=Const.allele_colors[i], linewidth=2,
+                     label=Const.allele_legend[i])
+        title = "t = " + str(self.t) + " n = " + str(self.get_n_at_t())
+        sub = plot_util.setup_space_plot(sub, 1.01, "allele freq", title)
+        plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+        fig.show()
+        return fig
 
 
 class RaggedArr3d:
@@ -1576,11 +1649,24 @@ class MatingHistograms:
         fig0.show()
 
 
-params = Params(10000, 10, 0.1)
-gen = Generation.get_founding(params)
-trial = Trial(params)
-subpoparr = SubpopArr.from_pedigree(trial.pedigree)
-allele_arr1 = AlleleArr.from_pedigree(trial.pedigree)
-allele_arr2 = AlleleArr.from_subpoparr(subpoparr)
-hist = MatingHistograms.from_pedigree(trial.pedigree)
+def get_bins(bin_size):
+    """Helper function to get spatial bins"""
+    n_bins = int(1 / bin_size)
+    bin_edges = np.linspace(0, 1, n_bins + 1)
+    return bin_edges, n_bins
 
+
+def get_n_bins(bin_size):
+    """Return the number of bins at a given bin size"""
+    return int(1 / bin_size)
+
+
+def get_bin_mids(bin_size):
+    """Return the centers of the spatial bins specified by bin_size"""
+    n_bins = get_n_bins(bin_size)
+    h = bin_size / 2
+    return np.linspace(h, 1 - h, n_bins)
+
+
+def get_time_string():
+    return str(time.strftime("%H:%M:%S", time.localtime()))

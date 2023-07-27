@@ -170,8 +170,10 @@ class Params:
         # coalescence and genetic parameters
         self.sample_n = 100
         self.n_sample_bins = 10
+        self.lower_t_cutoff = None
+        self.upper_t_cutoff = None
         self.n_windows = 10
-        self.demographic_model = "threepop"
+        self.demographic_model = "one_pop"
         self.mig_rate = 1e-4
         self.seq_length = 1e4
         self.recombination_rate = 1e-8
