@@ -22,7 +22,7 @@ def get_sample_zones(params):
     return sample_zones
 
 
-class SamplePedigree(pop_model.PedigreeLike):
+class SamplePedigree(pop_model.FullPedigree):
     factor = 0.62
 
     def __init__(self, pedigree, params):
@@ -78,9 +78,9 @@ class SamplePedigree(pop_model.PedigreeLike):
             self.i_slice[0] -= len(sample)
             self.enter_sample(sample)
         self.trim_pedigree()
-        old_ids = self.arr[:, self._i].astype(np.int32)
+        old_ids = self.arr[:, self._id].astype(np.int32)
         new_ids = np.arange(self.get_n_organisms(), dtype=np.int32)
-        self.arr[:, self._i] = new_ids
+        self.arr[:, self._id] = new_ids
         for i in [self._mat_id, self._pat_id]:
             self.arr[self.arr[:, i] != -1, i] = self.remap_ids(
                 self.arr[:, i], old_ids, new_ids)
@@ -99,7 +99,7 @@ class SamplePedigree(pop_model.PedigreeLike):
             sample_ids.append(sample_idx)
         sample_ids = np.concatenate(sample_ids)
         sample = final_gen.arr[sample_ids]
-        sample = sample[sample[:, self._i].argsort()]
+        sample = sample[sample[:, self._id].argsort()]
         return sample
 
     def enter_sample(self, gen_sample):
@@ -130,7 +130,7 @@ class SamplePedigree(pop_model.PedigreeLike):
 
     def sort_by_id(self):
         """Sort the sample pedigree array by id"""
-        self.arr = self.arr[self.arr[:, self._i].argsort()]
+        self.arr = self.arr[self.arr[:, self._id].argsort()]
 
     @staticmethod
     def remap_ids(vec, old_ids, new_ids):
@@ -538,7 +538,7 @@ class MultiWindow:
 
     def __init__(self, params):
         self.params = params
-        self.sample_ranges = get_sample_ranges(params)
+        self.sample_ranges = get_sample_zones(params)
         self.sample_sets = []
         self.subpop_sample_sets = []
         n_bins = params.n_sample_bins

@@ -151,6 +151,37 @@ class Trial:
 
 
 class PedigreeLike:
+    """The superclass of pedigree-like objects; operations on its child classes
+    are the primary activity of this simulation. All pedigree child classes
+    are built around long 2-dimensional numpy arrays and a Params class
+    instance which defines the simulation parameters under which the pedigree
+    exists
+
+    Pedigree arrays must include a column of ids and two columns of parent ids.
+    A time column is not strictly necessary but is included in all classes
+    because it simplifies pedigree sampling and interpretation. x-coordinate,
+    sex, alleles and state flag are further details which are utilized in
+    generation arrays during simulation but do not necessarily need to be
+    retained in pedigrees.
+    """
+    organism_axis = 0
+    character_axis = 1
+    n_subpops = 9
+    n_loci = 2
+    ploidy = 2
+    n_alleles = 4
+    adjust_fac = 1.01
+
+    def __init__(self, arr, params):
+        self.arr = arr
+        self.params = params
+
+    def get_n_organisms(self):
+        """Return the total number of organisms recorded in the pedigree"""
+        return np.shape(self.arr)[0]
+
+
+class FullPedigree(PedigreeLike):
     """The superclass of pedigree-like objects, which includes Generation,
     Pedigree and SamplePedigree. These objects are each structured around a
     single large array of floats and a set of parameters.
@@ -158,15 +189,10 @@ class PedigreeLike:
     Attributes preceded by a single underscore give column indices which
     access the type of information implied by the attribute name.
     """
-    organism_axis = 0
-    character_axis = 1
     dtype = np.float32
-    adjust_fac = 1.01
     n_cols = 11
-    n_subpops = 9
-    n_alleles = 4
     _sex = 0
-    _i = 1
+    _id = 1
     _x = 2
     _t = 3
     _mat_id = 4
@@ -185,8 +211,7 @@ class PedigreeLike:
     _pat_alleles = [7, 9]
 
     def __init__(self, arr, params):
-        self.arr = arr
-        self.params = params
+        super().__init__(arr, params)
 
     def __len__(self):
         """Return the length of self.arr, which equals the number of organisms
@@ -239,11 +264,11 @@ class PedigreeLike:
 
     def get_ids(self):
         """Return a vector of all ids in the array"""
-        return self.arr[:, self._i]
+        return self.arr[:, self._id]
 
     def get_ids_at_idx(self, idx):
         """Return a vector of all ids at idx in the array"""
-        return self.arr[idx, self._i]
+        return self.arr[idx, self._id]
 
     def sort_by_id(self):
         """Sort the generation by x coordinate. Sorting is vital to the
@@ -330,26 +355,22 @@ class PedigreeLike:
         """Get the index of individuals with flag < 0"""
         return np.where(self.arr[:, self._flag] < 0)[0]
 
-    def get_n_organisms(self):
-        """Return the total number of organisms recorded in the pedigree"""
-        return np.shape(self.arr)[0]
 
-
-class Organism(PedigreeLike):
+class Organism(FullPedigree):
     """A demonstration"""
 
     def __init__(self, sex, id, x, t, parent_ids, alleles, params):
         arr = np.zeros(self.n_cols)
         super().__init__(arr, params)
         self.arr[self._sex] = sex
-        self.arr[self._i] = id
+        self.arr[self._id] = id
         self.arr[self._x] = x
         self.arr[self._t] = t
         self.arr[self._parents] = parent_ids
         self.arr[self._alleles] = alleles
 
 
-class Generation(PedigreeLike):
+class Generation(FullPedigree):
     """The fundamental unit of simulation. Composed of N rows, each
     representing an organism.
     """
@@ -563,8 +584,8 @@ class Generation(PedigreeLike):
     @staticmethod
     def compute_bounds(seeking_sex, target_sex, limits):
         """Compute bounds, given two arrays as arguments"""
-        x_0 = seeking_sex[:, PedigreeLike._x]
-        x_1 = target_sex[:, PedigreeLike._x]
+        x_0 = seeking_sex[:, FullPedigree._x]
+        x_1 = target_sex[:, FullPedigree._x]
         l_bound = np.searchsorted(a = x_1, v = x_0 + limits[0])
         r_bound = np.searchsorted(a = x_1, v = x_0 + limits[1])
         bounds = np.column_stack((l_bound, r_bound))
@@ -646,7 +667,7 @@ class Generation(PedigreeLike):
         n = self.get_n_organisms()
         i1 = i0 + n
         ids = np.arange(i0, i1)
-        self.arr[:, self._i] = ids
+        self.arr[:, self._id] = ids
         return i1
 
     def remove_dead(self):
@@ -667,7 +688,7 @@ class Generation(PedigreeLike):
         return fig
 
 
-class MatingPairs(PedigreeLike):
+class MatingPairs(FullPedigree):
     organism_axis = 0
     sex_axis = 1
     character_axis = 2
@@ -759,13 +780,13 @@ class MatingPairs(PedigreeLike):
         return gametes
 
     def get_parent_ids(self):
-        return self.arr[:, :, self._i]
+        return self.arr[:, :, self._id]
 
     def get_maternal_x(self):
         return self.arr[:, 0, self._x]
 
 
-class Pedigree(PedigreeLike):
+class Pedigree(FullPedigree):
 
     adjust_fac = 1.01
 
@@ -803,6 +824,19 @@ class Pedigree(PedigreeLike):
         np.savetxt(file, self.arr, fmt="%d %d %1.8f %d %d %d %d %d %d %d %d",
                    delimiter=' ', newline='\n', header=header)
         file.close()
+        print(f"pedigree saved at {filename}")
+
+    def save_ped(self, filename):
+        """Save the pedigree array using the .ped format and an associated
+        .dat file to hold parameters and provenance
+        """
+        fmt = "% 4d % 11d %12.7f % 9d % 11d % 11d % 7d % 5d % 7d % 5d % 7d"
+        header = ("sex         id            x         t    maternal    "
+                  "paternal      A0    A1      B0    B1    flag")
+        pedigree_file = open(filename, 'w')
+        np.savetxt(pedigree_file, self.arr, fmt=fmt, delimiter=' ',
+                   newline='\n', header=header)
+        pedigree_file.close()
         print(f"pedigree saved at {filename}")
 
     def enter_gen(self, generation, i0, i1, flag=0):
@@ -845,7 +879,7 @@ class Pedigree(PedigreeLike):
         n = len(gen)
         generation = Generation(n, gen[:, self._x], t, gen[:, self._parents],
                                 gen[:, self._alleles], self.params)
-        generation.arr[:, self._i] = gen[:, self._i]
+        generation.arr[:, self._id] = gen[:, self._id]
         return generation
 
     def get_n_organisms_at_t(self, t):
@@ -886,28 +920,12 @@ class Pedigree(PedigreeLike):
         t = self.get_t()
         return np.where((t >= t_min) & (t <= t_max))[0]
 
-    def get_mating_frac(self):
-        """Return the fraction of females and males who produced offspring
-        across all generations, omitting the final generation"""
-        pairings = self.arr[:, self._parents]
-        post_founding = self.get_idx_between_t(0, self.g - 1)
-        pre_final = self.get_idx_between_t(1, self.g)
-        f_idx = self.get_female_idx()
-        m_idx = self.get_male_idx()
-        n_possible_mothers = 0
-        n_possible_fathers = 0
-        n_unique_mothers = 0
-        n_unique_fathers = 0
 
-
-class AbbrevPedigree:
+class AbbrevPedigree(PedigreeLike):
     """Abbreviated to only the bare minimum information to run coalescence
     simulations. Id matches row index and is therefore strictly unnecessary
     """
-    organism_axis = 0
-    character_axis = 1
     dtype = np.int32
-    adjust_fac = 1.01
     n_cols = 5
     _id = 0
     _t = 1
@@ -918,8 +936,7 @@ class AbbrevPedigree:
     map = np.array([1, 3, 4, 5])
 
     def __init__(self, arr, params, max = None):
-        self.arr = arr
-        self.params = params
+        super().__init__(arr, params)
         self.g = params.g
         self.t = params.g
         self.founding_gen = None
@@ -1000,10 +1017,6 @@ class AbbrevPedigree:
 
     def get_gen_arr(self, t):
         return self.arr[np.where(self.arr[:, self._t] == t)[0]]
-
-    def get_n_organisms(self):
-        """Return the total number of organisms recorded in the pedigree"""
-        return np.shape(self.arr)[0]
 
     def get_idx_at_t(self, t):
         """Return the indices at which organisms from time t exist"""
