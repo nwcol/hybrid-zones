@@ -8,6 +8,8 @@ import msprime
 
 import tskit
 
+import time
+
 from diploid import pop_model
 
 
@@ -52,7 +54,7 @@ class SamplePedigree(pop_model.FullPedigree):
         if not lower:
             lower = 0
         if not upper:
-            upper = params.g
+            upper = self.params.g
         t_slice = np.arange(lower, upper + 1)
         return t_slice
 
@@ -150,51 +152,41 @@ class SamplePedigree(pop_model.FullPedigree):
             sizes[i] = len(np.where(self.arr[:, self._t] == t)[0])
         return sizes
 
-    def get_tc(self, get_metadata=True):
+    def get_tc(self, get_metadata=False):
         """Build a pedigree table collection from the sample pedigree array
         """
-        demography = demographic_models[params.demographic_model](self.params)
+        demography = demographic_models[self.params.demographic_model](
+            self.params)
         ped_tc = msprime.PedigreeBuilder(demography=demography,
-                                         individuals_metadata_schema=
-                                         tskit.MetadataSchema.permissive_json()
-                                         )
-        # for the individuals table
+            individuals_metadata_schema=tskit.MetadataSchema.permissive_json())
+        # INDS
         ind_flags = np.zeros(self.get_n_organisms(), dtype=np.uint32)
         n = self.get_n_organisms()
         x = self.get_x()
         x_offsets = np.arange(n + 1, dtype=np.uint32)
         parents = np.ravel(self.get_parents()).astype(np.int32)
         parents_offset = np.arange(n + 1, dtype=np.uint32) * 2
-        # sex = self.get_sex().astype(int)
-        # genotype_idx = self.get_subpop_idx().astype(int)
-        # METADATA
         if get_metadata:
-            # getting dicts in a vectorized way?
-            # metadata_column = [{"sex": sex[i], "genotype": genotype_idx[i]}
-            #                   for i in np.arange(n)]
-            metadata_column = [
-                {"sex": ind[0], "genotype": (ind[6], ind[7], ind[8], ind[9])}
-                for ind in self.arr]
+            subpops = self.get_subpop_idx().astype(float)
+            sex = self.get_sex()
+            metadata_column = [{"sex": sex[i], "subpop": subpops[i]}
+                               for i in np.arange(n)]
             encoded_metadata = [
                 ped_tc.individuals.metadata_schema.validate_and_encode_row(row)
                 for row in metadata_column]
             metadata, metadata_offset = tskit.pack_bytes(encoded_metadata)
-            ped_tc.individuals.append_columns(
-                flags=ind_flags,
-                location=x,
-                location_offset=x_offsets,
-                parents=parents,
-                parents_offset=parents_offset,
-                metadata=metadata,
-                metadata_offset=metadata_offset)
+            ped_tc.individuals.append_columns(flags=ind_flags, location=x,
+                                              location_offset=x_offsets,
+                                              parents=parents,
+                                              parents_offset=parents_offset,
+                                              metadata=metadata,
+                                              metadata_offset=metadata_offset)
         else:
-            ped_tc.individuals.append_columns(
-                flags=ind_flags,
-                location=x,
-                location_offset=x_offsets,
-                parents=parents,
-                parents_offset=parents_offset)
-        # for the nodes table
+            ped_tc.individuals.append_columns(flags=ind_flags, location=x,
+                                              location_offset=x_offsets,
+                                              parents=parents,
+                                              parents_offset=parents_offset)
+        # NODES
         ind_flags[self.arr[:, self._t] == 0] = tskit.NODE_IS_SAMPLE
         node_flags = np.repeat(ind_flags, 2)
         node_times = np.repeat(self.get_t(), 2).astype(np.float64)
@@ -247,6 +239,7 @@ class AbbrevSamplePedigree(pop_model.AbbrevPedigree):
     def from_trial(cls, trial):
         if not trial.abbrev_pedigree:
             raise Exception("Trial instance has no abbreviated pedigree!")
+        params = trial.params
         return cls(trial.abbrev_pedigree, params)
 
     def __len__(self):
@@ -262,7 +255,7 @@ class AbbrevSamplePedigree(pop_model.AbbrevPedigree):
         lower = 0
         upper = self.params.upper_t_cutoff
         if not upper:
-            upper = params.g
+            upper = self.params.g
         t_slice = np.arange(lower, upper + 1)
         return t_slice
 
@@ -309,6 +302,7 @@ class AbbrevSamplePedigree(pop_model.AbbrevPedigree):
                                           replace=False)
             sample_ids.append(sample_idx)
         sample_ids = np.sort(np.concatenate(sample_ids))
+        self.last_gen_ids = sample_ids
         self.last_gen_x = last_gen.get_x()[sample_ids]
         sample = abbrev_pedigree.get_gen_arr(0)[sample_ids]
         return sample
@@ -376,7 +370,8 @@ class AbbrevSamplePedigree(pop_model.AbbrevPedigree):
         n = self.get_n_organisms()
         founder_ids = self.get_founding_ids()
         last_gen_ids = self.get_final_ids()
-        demography = demographic_models[params.demographic_model](self.params)
+        demography = demographic_models[self.params.demographic_model](
+            self.params)
         ped_tc = msprime.PedigreeBuilder(demography=demography,
             individuals_metadata_schema=tskit.MetadataSchema.permissive_json())
         # IND TABLE
@@ -404,7 +399,7 @@ class AbbrevSamplePedigree(pop_model.AbbrevPedigree):
         node_times = np.repeat(self.get_t(), 2).astype(np.float64)
         pop_methods = {"three_pop": self.get_three_pop_inds,
                        "one_pop": self.get_one_pop_inds}
-        ind_pops = pop_methods[params.demographic_model]()
+        ind_pops = pop_methods[self.params.demographic_model]()
         node_pops = np.repeat(ind_pops, 2)
         node_inds = np.repeat(np.arange(n, dtype=np.int32), 2)
         ped_tc.nodes.append_columns(flags=node_flags, time=node_times,
@@ -474,17 +469,37 @@ def reconstructive_coalescent(ts0, params):
     return ts
 
 
-class SampleGen(pop_model.PedigreeLike):
-    """Class of sample generations drawn from sample pedigrees"""
+class SampleGen(pop_model.FullPedigree):
+    """A class to store arrays of sample organisms, eg organisms in the last
+    generation who were sampled for coalescent simulation.
+
+    Used to keep track of sample organism genotypes, positions etc
+    """
 
     def __init__(self, arr, params, t):
         super().__init__(arr, params)
         self.t = t
 
     @classmethod
-    def from_sample_pedigree(cls, sample_pedigree, t):
-        arr = sample_pedigree.arr[sample_pedigree.arr[:, cls._t] == t]
-        return cls(arr, sample_pedigree.params, t)
+    def from_full_pedigree_sample(cls, sample_pedigree, t):
+        arr = sample_pedigree.arr[sample_pedigree.arr[:,
+                                  sample_pedigree._t] == t]
+        params = sample_pedigree.params
+        return cls(arr, params, t)
+
+    @classmethod
+    def from_abbrev_pedigree_sample(cls, sample_pedigree):
+        gen_ids = sample_pedigree.last_gen_ids
+        arr = sample_pedigree.last_gen[gen_ids]
+        pedigree_arr = sample_pedigree.arr[sample_pedigree.arr[:,
+                                  sample_pedigree._t] == 0]
+        pedigree_ids = pedigree_arr[:, sample_pedigree._id]
+        arr[:, cls._id] = pedigree_ids
+        arr[:, cls._parents] = sample_pedigree.arr[
+            np.ix_(pedigree_ids, sample_pedigree._parents)]
+        params = sample_pedigree.params
+        t = 0
+        return cls(arr, params, t)
 
 
 class SampleSet:
@@ -534,42 +549,134 @@ class SampleSet:
 
 
 class MultiWindow:
-    """The class of multi-window diversity and divergence analyses"""
+    """
+    The class of multi-window diversity and divergence analyses
+    """
 
-    def __init__(self, params):
+    def __init__(self, params, last_gen_sample, tc):
         self.params = params
-        self.sample_ranges = get_sample_zones(params)
+        self.sample_zones = get_sample_zones(params)
         self.sample_sets = []
         self.subpop_sample_sets = []
-        n_bins = params.n_sample_bins
-        self.pi = np.zeros((params.n_windows, n_bins))
-        self.pi_XY = np.zeros((params.n_windows, n_bins, n_bins))
+        self.pi = None
+        self.pi_XY = None
+        self.subpop_pi = None
         window_kb = self.params.seq_length / 1000
         self.Mb = self.params.seq_length * self.params.n_windows / 1e6
         print(f"sampling {self.params.n_windows} x {window_kb} " 
               f"kb regions for {self.Mb} Mb total")
+        self.run(last_gen_sample, tc)
 
-    # write str, repr etc
+    @classmethod
+    def from_full_pedigree(cls, full_pedigree_sample):
+        last_gen = SampleGen.from_full_pedigree_sample(full_pedigree_sample,
+                                                       t=0)
+        tc = full_pedigree_sample.get_tc()
+        params = full_pedigree_sample.get_tc()
+        return cls(params, last_gen, tc)
+
+    @classmethod
+    def from_abbrev_pedigree(cls, abbrev_pedigree_sample):
+        last_gen = SampleGen.from_abbrev_pedigree_sample(
+            abbrev_pedigree_sample)
+        tc = abbrev_pedigree_sample.get_tc()
+        params = abbrev_pedigree_sample.params
+        return cls(params, last_gen, tc)
+
+    def run(self, last_gen_sample, tc):
+        n_bins = self.params.n_sample_bins
+        type = self.params.multiwindow_type
+        if type == "subpops":
+            self.get_subpop_sample_sets(last_gen_sample)
+            n_subpops = pop_model.PedigreeLike.n_subpops
+            self.subpop_pi = np.zeros((self.params.n_windows, n_subpops, n_bins))
+        else:
+            self.get_sample_sets(last_gen_sample)
+            self.pi = np.zeros((self.params.n_windows, n_bins))
+            self.pi_XY = np.zeros((self.params.n_windows, n_bins, n_bins))
+        for i in np.arange(self.params.n_windows):
+            if type == "unrooted":
+                pi, pi_XY = self.get_unrooted_window(tc)
+                self.pi[i, :] = pi
+                self.pi_XY[i, :, :] = pi_XY
+            elif type == "rooted":
+                pi, pi_XY = self.get_rooted_window(tc)
+                self.pi[i, :] = pi
+                self.pi_XY[i, :, :] = pi_XY
+            elif type == "subpops":
+                pi = self.get_subpop_window(tc)
+                self.subpop_pi[i, :, :] = pi
+            print(f"window {i} complete @ " + get_time_string())
+        print("Multi-window sampling complete @ " + get_time_string())
+
+    def get_mean_pi(self):
+        return np.mean(self.pi, axis=0)
+
+    def get_mean_subpop_pi(self):
+        return np.mean(self.subpop_pi, axis=0)
+
+    def get_mean_pi_XY(self):
+        return np.mean(self.pi_XY, axis=0)
 
     def get_sample_sets(self, sample_gen):
         x = sample_gen.get_x()
         ids = (sample_gen.get_ids()).astype(np.int32)
-        for bin_ in self.sample_ranges:
+        for bin_ in self.sample_zones:
             ind_ids = ids[np.where((x > bin_[0]) & (x <= bin_[1]))[0]]
             self.sample_sets.append(SampleSet.from_ind_ids(ind_ids))
 
     def get_subpop_sample_sets(self, sample_gen):
-        """Return a list of sample sets"""
+        """
+        Return a list of sample sets
+        """
         x = sample_gen.get_x()
         ids = sample_gen.get_ids().astype(np.int32)
         subpop_idx = sample_gen.get_subpop_idx()
         for subpop in np.arange(9):
             subpop_sets = []
-            for lims in self.sample_ranges:
+            for lims in self.sample_zones:
                 inds = ids[np.where((x > lims[0]) & (x <= lims[1])
                                     & (subpop_idx == subpop))[0]]
                 subpop_sets.append(SampleSet.from_ind_ids(inds))
             self.subpop_sample_sets.append(subpop_sets)
+
+    def get_rooted_window(self, tc):
+        """
+        Perform explicit and reconstructive coalescence simulations and
+        compute diversity over spatial sample sets
+        """
+        ts = explicit_coalescent(tc, self.params)
+        ts = reconstructive_coalescent(ts, self.params)
+        pi = self.get_diversities(ts, self.sample_sets)
+        pi_XY = self.get_divergences(ts, self.sample_sets)
+        return pi, pi_XY
+
+    def get_subpop_window(self, tc):
+        """
+        Perform explicit and reconstructive coalescence simulations and
+        compute diversity and divergence using subpopulation sample sets
+        """
+        ts = explicit_coalescent(tc, self.params)
+        ts = reconstructive_coalescent(ts, self.params)
+        n_subpops = pop_model.PedigreeLike.n_subpops
+        pi = np.zeros((n_subpops, self.params.n_sample_bins))
+        for subpop in np.arange(n_subpops):
+            subpop_set = self.subpop_sample_sets[subpop]
+            lengths = np.array([len(s) for s in subpop_set])
+            idx = np.where(lengths > 0)[0]
+            nonzero_subpop_sets = []
+            for i in idx:
+                nonzero_subpop_sets.append(subpop_set[i])
+            pi[subpop, idx] = self.get_diversities(ts, nonzero_subpop_sets)
+        return pi
+
+    def get_unrooted_window(self, tc):
+        """Simulate coalescence over only the explicit sample pedigree, leaving
+        multiple roots, and compute diversities and divergences"""
+        ts = explicit_coalescent(tc, self.params)
+        pi = self.get_diversities(ts, self.sample_sets)
+        pi_XY = self.get_divergences(ts, self.sample_sets)
+        return pi, pi_XY
 
     def get_diversities(self, ts, sample_sets):
         n_sets = len(sample_sets)
@@ -592,96 +699,66 @@ class MultiWindow:
         pi_XY *= self.params.u
         return pi_XY
 
+    def save_pi(self, filename):
+        file = open(filename, 'w')
+        header = str(vars(self.params))
+        mean = self.get_mean_pi()
+        np.savetxt(
+            file, mean, delimiter=' ', newline='\n', header=header)
+        file.close()
 
-class RootedMultiWindow(MultiWindow):
+    def save_subpop_pi(self, filename):
+        shape = (self.params.n_windows,
+                 self.params.n_sample_bins * pop_model.PedigreeLike.n_subpops)
+        mean = self.get_mean_subpop_pi()
+        file = open(filename, 'w')
+        header = str(vars(self.params))
+        np.savetxt(file, mean, delimiter=' ', newline='\n', header=header)
+        file.close()
 
-    def __init__(self, sample_pedigree):
-        """Perform a series of coalescence simulations over a single sample
-        pedigree and return mean pi and piXY vectors
+    def save_pi_XY(self, filename):
+        shape = (self.params.n_windows, self.params.n_sample_bins ** 2)
+        mean = self.get_mean_pi_XY()
+        file = open(filename, 'w')
+        header = str(vars(self.params))
+        np.savetxt(file, mean, delimiter=' ', newline='\n', header=header)
+        file.close()
 
-        Useful for simulating larger regions of the genome than would be practical
-        using a single coalescence simulation with recombination.
+    def save_all(self, prefix, suffix):
         """
-        super().__init__(params)
-        tc = sample_pedigree.get_tc(get_metadata=False)
-        gen_0_sample = SampleGen.from_sample_pedigree(sample_pedigree, t=0)
-        self.get_sample_sets(gen_0_sample)
-        for i in np.arange(self.params.n_windows):
-            pi, pi_XY = self.get_window(tc)
-            self.pi[i, :] = pi
-            self.pi_XY[i, :, :] = pi_XY
-            print(f"window {i} complete")
-        self.mean_pi = np.mean(self.pi, axis=0)
-        self.mean_pi_XY = np.mean(self.pi_XY, axis=0)
+        Save each diversity/divergence array which has been created as a .txt
+        file
 
-    def get_window(self, tc):
-        ts = explicit_coalescent(tc, self.params)
-        ts = reconstructive_coalescent(ts, self.params)
-        pi = self.get_diversities(ts, self.sample_sets)
-        pi_XY = self.get_divergences(ts, self.sample_sets)
-        return pi, pi_XY
-
-
-class SubpopMultiWindow(MultiWindow):
-    """Performs coalescence simulations and returns diversity and divergence
-    values within/between spatial bin/subpopulation sample sets
-    """
-
-    def __init__(self, sample_pedigree):
-        super().__init__(sample_pedigree.params)
-        tc = sample_pedigree.get_tc(get_metadata=False)
-        gen_0_sample = SampleGen.from_sample_pedigree(sample_pedigree, t=0)
-        self.get_subpop_sample_sets(gen_0_sample)
-        # overwrites
-        n_bins = params.n_sample_bins
-        n_subpops = pop_model.PedigreeLike.n_subpops
-        self.pi = np.zeros((params.n_windows, n_subpops, n_bins))
-        for i in np.arange(self.params.n_windows):
-            pi = self.get_window(tc)
-            self.pi[i, :, :] = pi
-            print(f"window {i} complete")
-        self.mean_pi = np.mean(self.pi, axis=0)
-
-    def get_window(self, tc):
-        ts = explicit_coalescent(tc, self.params)
-        ts = reconstructive_coalescent(ts, self.params)
-        n_subpops = pop_model.PedigreeLike.n_subpops
-        pi = np.zeros((n_subpops, params.n_sample_bins))
-        for subpop in np.arange(n_subpops):
-            subpop_set = self.subpop_sample_sets[subpop]
-            lengths = np.array([len(s) for s in subpop_set])
-            idx = np.where(lengths > 0)[0]
-            nonzero_subpop_sets = []
-            for i in idx:
-                nonzero_subpop_sets.append(subpop_set[i])
-            pi[subpop, idx] = self.get_diversities(ts, nonzero_subpop_sets)
-        return pi
+        :param prefix: the parameter file name
+        :paramtype prefix: string
+        :param suffix: the cluster and process id
+        "paramtype suffix: string
+        """
+        type = self.params.multiwindow_type
+        if type == "unrooted":
+            filename1 = prefix + "_pi_" + suffix + ".txt"
+            self.save_pi(filename1)
+            filename2 = prefix + "_pi_XY_" + suffix + ".txt"
+            self.save_pi_XY(filename2)
+        elif type == "rooted":
+            filename1 = prefix + "_pi_" + suffix + ".txt"
+            self.save_pi(filename1)
+            filename2 = prefix + "_pi_XY_" + suffix + ".txt"
+            self.save_pi_XY(filename2)
+        elif type == "subpops":
+            filename = prefix + "_subpop_pi_" + suffix + ".txt"
+            self.save_subpop_pi(filename)
 
 
-class UnrootedMultiWindow(MultiWindow):
-
-    def __init__(self, sample_pedigree):
-        super().__init__(sample_pedigree.params)
-        tc = sample_pedigree.get_tc(get_metadata=False)
-        gen_0_sample = SampleGen.from_sample_pedigree(sample_pedigree, t=0)
-        self.get_sample_sets(gen_0_sample)
-        for i in np.arange(self.params.n_windows):
-            pi, pi_XY = self.get_window(tc)
-            self.pi[i, :] = pi
-            self.pi_XY[i, :, :] = pi_XY
-            print(f"window {i} complete")
-        self.mean_pi = np.mean(self.pi, axis=0)
-        self.mean_pi_XY = np.mean(self.pi_XY, axis=0)
-
-    def get_window(self, tc):
-        ts = explicit_coalescent(tc, self.params)
-        pi = self.get_diversities(ts, self.sample_sets)
-        pi_XY = self.get_divergences(ts, self.sample_sets)
-        return pi, pi_XY
+def get_time_string():
+    return str(time.strftime("%H:%M:%S", time.localtime()))
 
 
-params = pop_model.Params(10_000, 20, 0.1)
-params.history_type = "AbbrevPedigree"
-trial = pop_model.Trial(params)
-sample = AbbrevSamplePedigree.from_trial(trial)
+#params = pop_model.Params(10_000, 20, 0.1)
+#params.history_type = "AbbrevPedigree"
+#trial = pop_model.Trial(params)
+#sample = AbbrevSamplePedigree.from_trial(trial)
+
+#windows = MultiWindow.from_abbrev_pedigree(sample)
 #sample = SamplePedigree.from_trial(trial)
+#tc = sample.get_tc()

@@ -164,7 +164,7 @@ class Params:
 
         # general
         self.history_type = "Pedigree"
-        self.task = "return_pop_matrix"
+        self.task = "get_pedigree_table"
         self.bug_check = None
 
         # coalescence and genetic parameters
@@ -173,11 +173,12 @@ class Params:
         self.lower_t_cutoff = None
         self.upper_t_cutoff = None
         self.n_windows = 10
-        self.demographic_model = "one_pop"
         self.mig_rate = 1e-4
         self.seq_length = 1e4
         self.recombination_rate = 1e-8
         self.u = 1e-8
+        self.demographic_model = "one_pop"
+        self.multiwindow_type = "rooted"
 
     @classmethod
     def load(cls, filename):

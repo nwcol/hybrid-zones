@@ -45,6 +45,15 @@ class Cols:
         self.col_names = col_names
         self.max_rows = max_rows
         self.filled_rows = filled_rows
+        # initialize potential columns
+        self.id = None
+        self.parent_ids = None
+        self.time = None
+        self.xloc = None
+        self.sex = None
+        self.alleles = None
+        self.flag = None
+        # initialize actual columns
         for arr, name in zip(col_arrs, col_names):
             setattr(self, name, arr)
 
