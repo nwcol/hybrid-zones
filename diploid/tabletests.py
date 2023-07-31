@@ -1,6 +1,15 @@
 import numpy as np
 
-import pandas
+
+"""
+PedigreeTable
+|===Cols
+    |===id
+    |===parent_ids
+    |===time
+    |===...
+
+"""
 
 """
 General Ideas
@@ -24,6 +33,7 @@ Challenges in a fully vectorized (columnized?) table:
 
 """
 
+
 class ColSchema:
 
     pass
@@ -34,7 +44,7 @@ class Cols:
     Takes the place of the large np 2d array.
     """
 
-    def __init__(self, col_names, col_arrs, max_rows, filled_rows):
+    def __init__(self, col_names, max_rows, filled_rows):
         """
 
         :param col_names:
@@ -49,13 +59,10 @@ class Cols:
         self.id = None
         self.parent_ids = None
         self.time = None
-        self.xloc = None
+        self.x_loc = None
         self.sex = None
         self.alleles = None
         self.flag = None
-        # initialize actual columns
-        for arr, name in zip(col_arrs, col_names):
-            setattr(self, name, arr)
 
     @classmethod
     def initialize(cls, col_schema, max_rows):
@@ -66,16 +73,16 @@ class Cols:
         :return:
         """
         col_names = [x for x in col_schema]
-        col_arrs = []
+        filled_rows = 0
+        instance = cls(col_names, max_rows, filled_rows)
         for col in col_schema:
             dict = col_schema[col]
             if dict["cols"] == 1:
                 shape = max_rows
             else:
                 shape = (max_rows, dict["cols"])
-            col_arrs.append(np.zeros(shape, dtype=dict["dtype"]))
-        filled_rows = 0
-        return cls(col_names, col_arrs, max_rows, filled_rows)
+            setattr(instance, col, (np.zeros(shape, dtype=dict["dtype"])))
+        return instance
 
     def __len__(self):
         """
@@ -144,7 +151,7 @@ class PedigreeTable(Table):
                        "cols": 2},
         "time": {"dtype": np.int32,
                  "cols": 1},
-        "xloc": {"dtype": np.float32,
+        "x_loc": {"dtype": np.float32,
                  "cols": 1},
         "sex": {"dtype": np.uint8,
                 "cols": 1},
@@ -158,7 +165,7 @@ class PedigreeTable(Table):
         "id",
         "parent_ids",
         "time",
-        "xloc",
+        "x_loc",
         "sex",
         "alleles",
         "flag"
@@ -227,6 +234,23 @@ class GenerationTable(Table):
 class SubGenerationTable(Table):
 
     pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
