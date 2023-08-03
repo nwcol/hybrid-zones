@@ -215,18 +215,47 @@ class Columns:
                 kwargs[column] = getattr(self, column)[index]
         return Columns(ID, maternal_ID, paternal_ID, time, sex, n, n, **kwargs)
 
-    def format_header1(self):
+    def __setitem__(self, key, value):
         """
-        Return a string of the elements in :self.col_names: formatted as a
-        header for the table
+        Set rows at index "key" equal to value. key must be an integer, list,
+        slice or array of integers, and its length must exactly match the
+        number of rows in value. value is a Columns instance with max_rows <
+        the max_rows of this instance
 
-        :return: a formatted header string
+        all columns in THIS instance must exist in value, but all columns in
+        value need not exist in THIS (eg value may contain x, but THIS does
+        not; then x is ignored)
+
+        :param key:
+        :param value:
+        :return:
         """
-        _header = [f"{col_name : >11}" for col_name in self.col_names]
-        _header.insert(0, "")
-        _header.append("")
-        header = " |".join(_header)
-        return header
+        if isinstance(key, int):
+            key = [key]
+        elif isinstance(key, slice):
+            key = range(*key.indices(len(self)))
+        else:
+            key = np.asarray(key)
+            key = np.flatnonzero(key)
+        if len(key) != len(value):
+            raise ValueError("length of value does not match length of key!")
+        for col_name in self.col_names:
+            if col_name not in value.col_names:
+                raise ValueError(col_name + " not present in value!")
+            own_column = getattr(self, col_name)
+            val_column = getattr(value, col_name)
+            own_column[key] = val_column
+            setattr(self, col_name, own_column)
+
+    def append_generation(self, gen_cols):
+        """
+
+        :return:
+        """
+        ## no support for overflow rn
+        n = len(gen_cols)
+        self[self.filled_rows:self.filled_rows + n] = gen_cols
+        self.filled_rows += n
 
     def apply_ID(self):
         """
