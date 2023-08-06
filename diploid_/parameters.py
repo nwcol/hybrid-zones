@@ -153,7 +153,7 @@ class Params:
 
         # fitness parameters
         self.intrinsic_fitness = False
-        self.H_fitness = 1
+        self.hyb_fitness = 1
         self.extrinsic_fitness = False
         self.female_fitness = False
         self.k_1 = -20

@@ -2,8 +2,38 @@ import numpy as np
 
 from diploid import math_fxns
 
+"""
+NOTES
+
+Summary of the process of mating:
+
+prerequisites: the parent generation table must be sorted by x-position and 
+given absolute IDs accordingly eg. in the order of increasing x-position.
+
+1. An IDmap is declared. This gives the ID mapping from
+    in-sex relative ID -> in-gen relative ID -> absolute ID,
+which is later used to make the child generation table
+
+2. Density index bounds are computed; these are used to compute local densities
+
+3. The number of offspring produced by each female is pre-computed. This is 
+done before mating occurs because it gives a determinate number of offspring
+and because it allows the omission of females with 0 offspring from mating,
+improving efficiency
+
+4. Mating index bounds are computed; these define the pools of males accessible
+to each female for mating
+
+4. 
+
+"""
 
 
+def compute_pd(x, s):
+    """Compute a vector of probability density values for a normal distribution
+    with standard deviation s, mean 0.
+    """
+    return 1 / (s * np.sqrt(2 * np.pi)) * np.exp(-0.5 * np.square(x / s))
 
 
 class IDmap:
@@ -36,6 +66,15 @@ class IDmap:
         """
         return self.absolute[relative_IDs]
 
+    def female_to_absolute(self, relative_female_IDs):
+        """
+        Map relative female IDs to absolute IDs.
+
+        :param relative_female_IDs:
+        :return:
+        """
+        return self.absolute[self.female_to_relative(relative_female_IDs)]
+
     def female_to_relative(self, relative_female_IDs):
         """
         Map relative female IDs to relative generation IDs.
@@ -45,6 +84,15 @@ class IDmap:
         :return:
         """
         return self.female_index[relative_female_IDs]
+
+    def male_to_absolute(self, relative_male_IDs):
+        """
+        Map relative female IDs to absolute IDs.
+
+        :param relative_female_IDs:
+        :return:
+        """
+        return self.absolute[self.male_to_relative(relative_male_IDs)]
 
     def male_to_relative(self, relative_male_IDs):
         """
@@ -98,33 +146,7 @@ class Bounds:
         return self.bounds[:, 1] - self.bounds[:, 0]
 
 
-class LongX:
-
-    def __init__(self, generation_table, id_map, mating_bounds):
-        male_x = generation_table.cols.x[id_map.male_index]
-        female_x = generation_table.cols.x[id_map.female_index]
-        pops = mating_bounds.get_bound_pops()
-        total = np.sum(pops) # about 1,000,000 long; roughly 200 * 5000
-        cum = np.concatenate((np.array([0]), np.cumsum(pops)))
-        long_x = np.zeros(total, dtype=np.float32)
-        f_x = np.zeros(total, dtype=np.float32)
-        for i in np.arange(len(female_x)):
-            long_x[cum[i]:cum[i+1]] = male_x[mating_bounds.bounds[i,0]:
-                                             mating_bounds.bounds[i,1]]
-            f_x[cum[i]:cum[i+1]] = female_x[i]
-        d = f_x - long_x
-        self.p = compute_pd(d, self.params.beta)
-
-
-def compute_pd(x, s):
-    """Compute a vector of probability density values for a normal distribution
-    with standard deviation s, mean 0.
-    """
-    return 1 / (s * np.sqrt(2 * np.pi)) * np.exp(-0.5 * np.square(x / s))
-
-
 class Matings:
-
     """
     It is useful to define two types of 'relative ID' for the purposes of
     simulating mating and mate choice. Note that x-positions are unchangeable
@@ -158,45 +180,48 @@ class Matings:
     -mate choice. add lower idx bound
     (this all done with relative ids)
 
-
-
     """
 
-    def __init__(self, parent_generation_table):
-        self.params = parent_generation_table.params
-        self.id_map = IDmap(parent_generation_table)
-        d_limits = [-self.params.density_bound, self.params.density_bound]
-        self.density_bounds = Bounds(parent_generation_table, 0, -1, d_limits)
-        m_limits = [-self.params.bound, self.params.bound]
-        self.mating_bounds = Bounds(parent_generation_table, 0, 1, m_limits)
-        self.n_offspring = self.compute_n_offspring()
+    def __init__(self, parent_table):
+        self.params = parent_table.params
+        self.id_map = IDmap(parent_table)
+        self.n_offspring = self.compute_n_offspring(parent_table)
         self.n = np.sum(self.n_offspring)
-        maternal_ids, paternal_ids = self.go(parent_generation_table)
+        self.mating_bounds = Bounds(parent_table, 0, 1,
+                limits=[-self.params.bound, self.params.bound])
+        maternal_ids, paternal_ids = self.go(parent_table)
         self.maternal_ids = self.id_map.female_to_relative(maternal_ids)
         self.paternal_ids = self.id_map.male_to_relative(paternal_ids)
         self.abs_maternal_ids = self.id_map.relative_to_absolute(self.maternal_ids)
         self.abs_paternal_ids = self.id_map.relative_to_absolute(self.paternal_ids)
 
-    def compute_n_offspring(self):
+    def compute_n_offspring(self, parent_table):
         """
         Compute the numbers of offspring produced by mating.
 
         :return:
         """
         k = self.params.K * 2 * self.params.density_bound
-        density = self.density_bounds.get_bound_pops()
-        density += self.edge_density_adjustment()
+        density_bounds = Bounds(parent_table, 0, -1,
+            limits=[-self.params.density_bound, self.params.density_bound])
+        density = density_bounds.get_bound_pops()
+        density = density + self.edge_density_adjustment(parent_table)
         expectation = 2 * np.exp(self.params.r * (1 - (density / k)))
         n_offspring = np.random.poisson(expectation)
         return n_offspring
 
-    def edge_density_adjustment(self):
+    def edge_density_adjustment(self, parent_table):
         """
         Compute a vector of density adjustments for the edges of space
 
         """
-        # rebuild
-        return 0
+        b = self.params.density_bound
+        k = self.params.K * b
+        female_x = parent_table.cols.x[parent_table.cols.get_sex_index(0)]
+        adjustment = np.zeros(len(female_x), dtype=np.float32)
+        adjustment[female_x < b] = (b - female_x[female_x < b]) / b * k
+        adjustment[female_x > 1 - b] = (female_x[female_x > 1 - b] - 1 + b) / b * k
+        return adjustment
 
     def compute_pref_index(self, generation_table):
         """
@@ -228,8 +253,8 @@ class Matings:
         male_x = generation_table.x[self.id_map.male_index]
         pref_matrix = self.compute_pref_matrix(generation_table)
         pref_index = self.compute_pref_index(generation_table)
-        maternal_ids = np.zeros(self.n, dtype=np.int32)
-        paternal_ids = np.zeros(self.n, dtype=np.int32)
+        maternal_ids = np.full(self.n, -1, dtype=np.int32)
+        paternal_ids = np.full(self.n, -1, dtype=np.int32)
         i = 0
         for f_id in np.arange(len(female_x)):
             if self.n_offspring[f_id] > 0:
@@ -242,6 +267,8 @@ class Matings:
                 i += self.n_offspring[f_id]
             else:
                 pass
+        maternal_ids = maternal_ids[paternal_ids > -1]
+        paternal_ids = paternal_ids[paternal_ids > -1]
         return maternal_ids, paternal_ids
 
     def gaussian(self, x, male_x, pref_vec, bound):
@@ -285,27 +312,6 @@ class Matings:
         gametes[:, 0] = parent_table.cols.alleles[row_index, A_index]
         gametes[:, 1] = parent_table.cols.alleles[row_index, B_index]
         return gametes
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def gaussian(x, m_x_vec, pref_vec, bound, params):

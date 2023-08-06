@@ -2,13 +2,9 @@ import matplotlib
 
 import matplotlib.pyplot as plt
 
-import matplotlib.colors as colors
-
 import numpy as np
 
 import time
-
-import os
 
 from diploid_.parameters import Params
 
@@ -18,13 +14,32 @@ from diploid_ import mating_models
 
 from diploid_ import dispersal_models
 
+from diploid_ import fitness_models
+
 
 """
 TO-DO
 
 X-set up genotypearr
 X-get plots working
+X-subplots
 X-set up allelearr
+
+-make the mating model more efficient and more comprehensible
+
+-truncation of the pedigree!!!! how
+-__repr__, __str__ for pedigree and generation tables
+-sort out how to handle properties between columns vs tables (direct access
+or access through table property?)
+
+-use masking instead of deletion to handle preventing hybrids from mating
+-make sure that this works
+
+-replace A_alleles etc with signal_alleles (lower case, descriptive)
+
+-emergency table extension 
+-params might be stored at too many levels. redundancy. think about this
+
 -set up models
 -get simulation running
 -beef up columns class
@@ -149,7 +164,7 @@ class Columns:
         Return a formatted string representation of one row in the table
         all max-length values should have buffer | xx...xx | of one space
 
-        :param row: the row index of interest
+        :param index: the row index of interest
         :return:
         """
         lengths = self.get_col_widths()
@@ -286,6 +301,26 @@ class Columns:
         return self.alleles[:, [2, 3]]
 
     @property
+    def signal_sums(self):
+        if "alleles" not in self.col_names:
+            raise AttributeError("no alleles columns exist in this instance")
+        return np.sum(self.alleles[:, [0, 1]], axis=1)
+
+    @property
+    def preference_sums(self):
+        if "alleles" not in self.col_names:
+            raise AttributeError("no alleles columns exist in this instance")
+        return np.sum(self.alleles[:, [2, 3]], axis=1)
+
+    @property
+    def signal(self):
+        return self.signal_sums - 2
+
+    @property
+    def preference(self):
+        return self.preference_sums - 2
+
+    @property
     def allele_sums(self):
         sums = np.zeros((self.filled_rows, 2), dtype=np.uint8)
         sums[:, 0] = np.sum(self.A_alleles, axis=1)
@@ -341,6 +376,26 @@ class Columns:
         """
         return np.nonzero(self.sex == target_sex)[0]
 
+    def get_subpop_index(self, **kwargs):
+        """
+        Return the index of organisms with character defined in **kwargs
+        using the format column=character.
+
+        'signal' and 'preference' may be given as args.
+
+        example
+        >>>cols.get_subpop_index(sex=0)
+        array([0, 1, 3, ... , 9878, 9879], dtype=np.int64)
+
+        :param kwargs:
+        :return:
+        """
+        index = np.arange(len(self))
+        for arg in kwargs:
+            new = np.nonzero(getattr(self, arg) == kwargs[arg])[0]
+            index = np.intersect1d(index, new)
+        return index
+
     def get_subpop_size(self, **kwargs):
         """
         Return the number of organisms with character defined in **kwargs
@@ -353,10 +408,7 @@ class Columns:
         :param kwargs:
         :return:
         """
-        index = np.arange(len(self))
-        for arg in kwargs:
-            new = np.nonzero(getattr(self, arg) == kwargs[arg])[0]
-            index = np.intersect1d(index, new)
+        index = self.get_subpop_index(**kwargs)
         return len(index)
 
     def get_subpop(self, **kwargs):
@@ -371,13 +423,17 @@ class Columns:
         :param kwargs:
         :return:
         """
-        index = np.arange(len(self))
-        for arg in kwargs:
-            new = np.nonzero(getattr(self, arg) == kwargs[arg])[0]
-            index = np.intersect1d(index, new)
+        index = self.get_subpop_index(**kwargs)
         return self[index]
 
     def truncate(self, new_max=None):
+        """
+        Return a copy of the Columns instance shortened to new_max, or to
+        self.filled_rows if no new_max is provided
+
+        :param new_max:
+        :return:
+        """
         if not new_max or new_max > self.max_rows:
             new_max = self.filled_rows
         return self[:new_max]
@@ -428,6 +484,43 @@ class Columns:
             if col_name not in cls._col_names:
                 kwargs[col_name] = archive[col_name]
         return cls(ID, maternal_ID, paternal_ID, time, sex, n, n, **kwargs)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class Table:
@@ -509,7 +602,7 @@ class GenerationTable(Table):
                 x_.append(np.random.uniform(lower, upper, n_))
         alleles = np.vstack(alleles_)
         x = np.concatenate(x_)
-        flag = np.zeros(n, dtype=np.uint8)
+        flag = np.zeros(n, dtype=np.int8)
         cols = Columns(ID, maternal_ID, paternal_ID, time, sex, n, n, x=x,
                        alleles=alleles, flag=flag)
         cols.sort_by_x()
@@ -546,10 +639,11 @@ class GenerationTable(Table):
         sex = cls.get_random_sex(n)
         x = parent_generation_table.cols.x[matings.maternal_ids]
         alleles = matings.get_zygotes(parent_generation_table)
-        flag = np.full(n, 1, dtype=np.uint8)
+        flag = np.full(n, 1, dtype=np.int8)
         cols = Columns(ID, maternal_ID, paternal_ID, time, sex, n, n, x=x,
                        alleles=alleles, flag=flag)
         cols.sort_by_x()
+        params = parent_generation_table.params
         return cls(cols, params, t)
 
     @staticmethod
@@ -565,6 +659,28 @@ class GenerationTable(Table):
 
     def apply_ID(self):
         self.cols.apply_ID()
+
+    @property
+    def living_mask(self):
+        """
+        Return the indices of individuals with flag=1
+
+        :return:
+        """
+        return self.cols.get_subpop_index(flag=1)
+
+    def set_flags(self, idx, flag):
+        """
+        This is present only in the generation table because no other table
+        should set flags
+
+        :param idx:
+        :param flag:
+        :return:
+        """
+        if "flag" not in self.cols.col_names:
+            raise AttributeError("no flags column exists")
+        self.cols.flag[idx] = flag
 
     def plot(self):
         gen_arr = GenotypeArr.from_generation(self)
@@ -586,14 +702,14 @@ class PedigreeTable(Table):
         filled_rows = 0
         max_rows = int(params.K * (params.g + 1) * cls.size_factor)
         ID = np.zeros(max_rows, dtype=np.int32)
-        time = np.zeros(max_rows, dtype=np.int32)
+        time = np.full(max_rows, -1, dtype=np.int32)
         maternal_ID = np.zeros(max_rows, dtype=np.int32)
         paternal_ID = np.zeros(max_rows, dtype=np.int32)
         sex = np.zeros(max_rows, dtype=np.uint8)
         if full:
             kwargs = {"x" : np.zeros(max_rows, dtype=np.float32),
                       "alleles" : np.zeros((max_rows, 4), dtype=np.uint8),
-                      "flag" : np.full(max_rows, 255, dtype=np.uint8)}
+                      "flag" : np.full(max_rows, -10, dtype=np.int8)}
         else:
             kwargs = dict()
         cols = Columns(ID, maternal_ID, paternal_ID, time, sex, filled_rows,
@@ -643,6 +759,7 @@ class Trial:
         self.figs = []
 
         self.complete = False
+        self.g = params.g
         self.t = params.g
 
         self.params = params
@@ -654,15 +771,16 @@ class Trial:
         self.run_time_vec[self.params.g] = 0
         generation_table = GenerationTable.get_founding(self.params)
         if self.plot_int:
-            self.figs.append(generation_table.plot())
+            self.initialize_figures()
+            self.enter_figure(generation_table)
         while self.t > 0:
             self.pedigree_table.append_generation(generation_table)
             generation_table = self.cycle(generation_table)
         self.pedigree_table.append_generation(generation_table)
         # truncate pedigree
         if self.plot_int:
-            for fig in self.figs:
-                fig.show()
+            self.set_figure_legend()
+            self.figure.show()
         print("simulation complete")
 
     def cycle(self, parent_table):
@@ -673,11 +791,12 @@ class Trial:
         generation_table = GenerationTable.mate(parent_table)
         dispersal_models.disperse(generation_table)
         # generation_table.fitness(self.params)
+        generation_table.cols.sort_by_x()
         generation_table.cols.apply_ID(i_0=self.pedigree_table.filled_rows)
         self.report()
         if self.plot_int:
             if self.t % self.plot_int == 0:
-                self.figs.append(generation_table.plot())
+                self.enter_figure(generation_table)
         return generation_table
 
     def update_t(self):
@@ -695,6 +814,45 @@ class Trial:
             time_string = self.get_time_string()
             print(f"g{self.t : > 6} complete, runtime = {run_t : >8}"
                   + f" s, averaging {mean_t : >8} s/gen, @ {time_string :>8}")
+
+    def initialize_figures(self):
+        """
+        Initialize a figure with subplots
+        :return:
+        """
+        n_figs = self.g - np.sum(np.arange(self.g) % self.plot_int != 0) + 1
+        shape_dict = {1: (1, 1), 2: (1, 2), 3: (1, 3), 4: (2, 2), 5: (2, 3),
+                      6: (2, 3), 8: (2, 4), 9: (3, 3), 10: (2, 5), 11: (3, 4),
+                      12: (3, 4), 16: (4, 4), 21: (3, 7)}
+        if n_figs in shape_dict:
+            n_rows, n_cols = shape_dict[n_figs]
+        else:
+            n_rows = 2
+            n_cols = (n_figs + 1) //2
+        self.plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        self.figure, self.axs = plt.subplots(n_rows, n_cols, figsize=size,
+                                             sharex='all', sharey='all')
+        self.figure.tight_layout(pad=3.0)
+        self.figure.subplots_adjust(right=0.9)
+        self.subplot_i = 0
+
+    def enter_figure(self, generation_table):
+        """
+        Enter a subplot into its appropriate subplot slot
+
+        :return:
+        """
+        index = np.unravel_index(self.subplot_i, self.plot_shape)
+        ax = self.axs[index]
+        genotype_arr = GenotypeArr.from_generation(generation_table)
+        genotype_arr.get_subplot(ax)
+        self.subplot_i += 1
+
+    def set_figure_legend(self):
+        self.figure.legend(["N", "Hyb"] + Constants.subpop_legend, fontsize=10,
+                           loc='right', borderaxespad=0,  fancybox=False,
+                           framealpha=1, edgecolor="black")
 
     @staticmethod
     def get_time_string():
@@ -840,11 +998,12 @@ class GenotypeArr:
         """Return a vector of whole population bin densities in generation t"""
         return np.sum(self.arr[t], axis=1)
 
-    def plot_density(self, t=0):
-        """Make a plot of the densities of each subpopulation across space
-        at index (time) t"""
-        fig = plt.figure(figsize=Constants.plot_size)
-        sub = fig.add_subplot(111)
+    def get_subplot(self, sub, t=0):
+        """
+
+        :param t:
+        :return:
+        """
         b = plot_util.get_bin_mids(self.bin_size)
         n_vec = self.get_bin_densities(t)
         sub.plot(b, n_vec, color="black", linestyle='dashed', linewidth=2)
@@ -861,7 +1020,16 @@ class GenotypeArr:
             time = t
         title = "t = " + str(time) + " n = " + n
         sub = plot_util.setup_space_plot(sub, y_max, "subpop density", title)
-        plt.legend(["N", "Hyb"] + Constants.subpop_legend, fontsize=8,
+
+    def plot_density(self, t=0):
+        """
+        Make a plot of the densities of each subpopulation across space
+        at index (time) t
+        """
+        fig = plt.figure(figsize=Constants.plot_size)
+        sub = fig.add_subplot(111)
+        self.get_subplot(sub, t)
+        sub.legend(["N", "Hyb"] + Constants.subpop_legend, fontsize=8,
                    bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
         fig.show()
         return fig
@@ -1059,11 +1227,13 @@ class Constants:
                        "deepskyblue",
                        "blue"]
 
+    # names of the alleles
     allele_legend = ["$A^1$",
                      "$A^2$",
                      "$B^1$",
                      "$B^2$"]
 
+    # names of the 9 genotypes
     subpop_legend = ["A = 1 B = 1",
                      "A = 1 B = H",
                      "A = 1 B = 2",
@@ -1112,13 +1282,13 @@ class Constants:
                                 [[0, 2], [1, 1]],
                                 [[0, 2], [0, 2]]], dtype=np.uint8)
 
+
 plt.rcParams['figure.dpi'] = 100
 matplotlib.use('Qt5Agg')
 
 
 params = Params(10_000, 10, 0.1)
-
 gen = GenerationTable.get_founding(params)
-
 cols = gen.cols
+trial = Trial(params, plot_int=1)
 
