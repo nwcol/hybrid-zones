@@ -35,7 +35,11 @@ or access through table property?)
 -use masking instead of deletion to handle preventing hybrids from mating
 -make sure that this works
 
+-when to sort by x and id for max consistency and least use
+
 -replace A_alleles etc with signal_alleles (lower case, descriptive)
+
+-does setting arrays as attributes copy them?
 
 -emergency table extension 
 -params might be stored at too many levels. redundancy. think about this
@@ -67,62 +71,74 @@ class Columns:
     simulation.
     """
 
+    # these are the columns essential to the function of the pedigree. they
+    # are therefore mandatory to instantiate a Columns instance. time is
+    # arguably not needed but its inclusion is very convenient
     _col_names = ["ID",
                   "maternal_ID",
                   "paternal_ID",
-                  "time",
-                  "sex"]
+                  "time"]
 
-    def __init__(self, ID, maternal_ID, paternal_ID, time, sex, filled_rows,
-                 max_rows, **kwargs):
+    def __init__(self, filled_rows, max_rows, **kwargs):
         """
-        All arrays must match max_rows in length.
+        Constructor for the Columns class. Kwargs is used as a field for all
+        column arrays, although four of them (listed in _col_names) are
+        essential for the column to be initialized. This may change.
+        All arrays must have a length equal to max_rows.
 
-        :param params:
-        :param ID:
-        :param maternal_ID:
-        :param paternal_ID:
-        :param time:
-        :param sex:
-        :param max_rows:
-        :param filled_rows:
-        :param kwargs:
+        :param filled_rows: index of the highest filled row. if the column
+            is a pedigree being initialized, should equal 0; if a generation,
+            should equal max_rows
+        :type filled_rows: int
+        :param max_rows: the length of the column arrays
+        :type max_rows: int
+
+        document kwargs later
         """
-        self.max_rows = max_rows
+        # this clarifies the data types each array should have. these are
+        # checked during initialization to ensure proper behavior
+        types = {"ID": np.int32,
+                 "maternal_ID": np.int32,
+                 "paternal_ID": np.int32,
+                 "time": np.int32,
+                 "sex": np.uint8,  # takes only 0, 1
+                 "x": np.float32,
+                 "alleles": np.uint8,  # takes only 0, 1
+                 "flag": np.int8,  # takes -2, -1, 0, 1
+                 "genotype_code": np.uint8}  # takes 0, 1, 2
+
+        if filled_rows > max_rows:
+            raise ValueError("filled_rows exceeds max_rows")
         self.filled_rows = filled_rows
-        self.ID = ID
-        self.maternal_ID = maternal_ID
-        self.paternal_ID = paternal_ID
-        self.time = time
-        self.sex = sex
-        self.col_names = [col_name for col_name in self._col_names]
+        self.max_rows = max_rows
+        self.col_names = [name for name in kwargs]
+        for col_name in self.col_names:
+            if kwargs[col_name].dtype != types[col_name]:
+                raise TypeError(f"{col_name} has improper data type")
+        for _col_name in self._col_names:
+            if _col_name not in kwargs:
+                raise ValueError(f"kwargs did not include column {_col_name}")
+
+        self.ID = kwargs["ID"]
+        self.maternal_ID = kwargs["maternal_ID"]
+        self.paternal_ID = kwargs["paternal_ID"]
+        self.time = kwargs["time"]
+        if "sex" in kwargs:
+            self.sex = kwargs["sex"]
         if "x" in kwargs:
             self.x = kwargs["x"]
-            self.col_names.append("x")
-        else:
-            self.x = None
         if "alleles" in kwargs:
             self.alleles = kwargs["alleles"]
-            self.col_names.append("alleles")
-        else:
-            self.alleles = None
-        if "genotype_ID" in kwargs:
-            self.genotype_ID = kwargs["genotype_ID"]
-            self.col_names.append("genotype_ID")
-        else:
-            self.genotype_ID = None
         if "flag" in kwargs:
             self.flag = kwargs["flag"]
-            self.col_names.append("flag")
-        else:
-            self.flag = None
+        if "genotype_code" in kwargs:
+            self.genotype_code = kwargs["genotype_code"]
+
         lengths = [len(getattr(self, col)) for col in self.col_names]
         if len(set(lengths)) > 1:
-            raise AttributeError("column length mismatch")
+            raise AttributeError("column length mismatched to column length")
         if lengths[0] != self.max_rows:
-            raise AttributeError("max_rows mismatch")
-        if self.filled_rows > self.max_rows:
-            raise ValueError("filled_rows exceeds max_rows")
+            raise AttributeError("max_rows mismatched to column length")
 
     def __repr__(self):
         out = (f"Cols with {self.filled_rows} filled rows of "
@@ -222,12 +238,28 @@ class Columns:
 
     def __getitem__(self, index):
         """
-        Adapted from tskit basetable class. Return a subset of the pedigree
-        using a single integer index, list or array of indices, slice,
-        or boolean mask
+        Adapted from the __getitem__ method in the tskit basetable class.
+        Return a new Columns instance holding a subset of this instance
+        using 1. an integer, 2. a slice, 3. an array of integers (index), or
+        4. a boolean mask
 
-        :param index:
-        :return:
+        example
+        >>>cols
+        Cols with 10000 filled rows of 10000 max rows in 8 columns
+        >>>cols[10]
+        Cols with 1 filled rows of 1 max rows in 8 columns
+        >>>cols[10].ID
+        array([10])
+        >>>cols[10:20]
+        Cols with 10 filled rows of 10 max rows in 8 columns
+        >>>cols[10, 20, 40, 100, 200]
+        Cols with 5 filled rows of 5 max rows in 8 columns
+        >>>cols[10, 20, 40, 100, 200].ID
+        array([ 10,  20,  40, 100, 200])
+
+        :param index: the integer, slice, index or mask to access
+        :type index: integer, slice, array of integers, or boolean mask
+        :return: Subset of self accessed by index
         """
         if isinstance(index, int):
             if index < 0:
@@ -244,17 +276,12 @@ class Columns:
                     raise IndexError(
                         "boolean index must be same length as table")
                 index = np.flatnonzero(index)
-        ID = self.ID[index]
-        maternal_ID = self.maternal_ID[index]
-        paternal_ID = self.paternal_ID[index]
-        time = self.time[index]
-        sex = self.sex[index]
-        n = np.size(index)
         kwargs = dict()
         for column in self.col_names:
-            if column not in Columns._col_names:
-                kwargs[column] = getattr(self, column)[index]
-        return Columns(ID, maternal_ID, paternal_ID, time, sex, n, n, **kwargs)
+            kwargs[column] = getattr(self, column)[index]
+        filled_rows = np.size(index)
+        max_rows = np.size(index)
+        return Columns(filled_rows, max_rows, **kwargs)
 
     def __setitem__(self, key, value):
         """
@@ -486,43 +513,6 @@ class Columns:
         return cls(ID, maternal_ID, paternal_ID, time, sex, n, n, **kwargs)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class Table:
 
     def __init__(self, cols, params):
@@ -573,6 +563,19 @@ class Table:
     def genotype_codes(self):
         return self.cols.genotype_codes
 
+    def truncate(self, new_max=None):
+        """
+        Reduce the length of the table Columns instance to new_max, or if no
+        new_max is provided, reduce to self.cols.filled_rows
+
+        :param new_max:
+        :return:
+        """
+        if not new_max:
+            new_max = self.cols.filled_rows
+        # this is copying, for sure
+        self.cols = self.cols[:new_max]
+
 
 class GenerationTable(Table):
 
@@ -599,11 +602,12 @@ class GenerationTable(Table):
             if n_ > 0:
                 alleles_.append(np.repeat(genotype[np.newaxis, :], n_, axis=0))
                 lower, upper = params.subpop_lims[i]
-                x_.append(np.random.uniform(lower, upper, n_))
+                x_.append(np.random.uniform(lower, upper, n_).astype(np.float32))
         alleles = np.vstack(alleles_)
         x = np.concatenate(x_)
         flag = np.zeros(n, dtype=np.int8)
-        cols = Columns(ID, maternal_ID, paternal_ID, time, sex, n, n, x=x,
+        cols = Columns(n, n, ID=ID, maternal_ID=maternal_ID,
+                       paternal_ID=paternal_ID, time=time, sex=sex, x=x,
                        alleles=alleles, flag=flag)
         cols.sort_by_x()
         cols.apply_ID()
@@ -640,9 +644,9 @@ class GenerationTable(Table):
         x = parent_generation_table.cols.x[matings.maternal_ids]
         alleles = matings.get_zygotes(parent_generation_table)
         flag = np.full(n, 1, dtype=np.int8)
-        cols = Columns(ID, maternal_ID, paternal_ID, time, sex, n, n, x=x,
+        cols = Columns(n, n, ID=ID, maternal_ID=maternal_ID,
+                       paternal_ID=paternal_ID, time=time, sex=sex, x=x,
                        alleles=alleles, flag=flag)
-        cols.sort_by_x()
         params = parent_generation_table.params
         return cls(cols, params, t)
 
@@ -698,7 +702,7 @@ class PedigreeTable(Table):
         self.t = g
 
     @classmethod
-    def initialize(cls, params, full=True):
+    def initialize_full(cls, params, full=True):
         filled_rows = 0
         max_rows = int(params.K * (params.g + 1) * cls.size_factor)
         ID = np.zeros(max_rows, dtype=np.int32)
@@ -707,13 +711,13 @@ class PedigreeTable(Table):
         paternal_ID = np.zeros(max_rows, dtype=np.int32)
         sex = np.zeros(max_rows, dtype=np.uint8)
         if full:
-            kwargs = {"x" : np.zeros(max_rows, dtype=np.float32),
-                      "alleles" : np.zeros((max_rows, 4), dtype=np.uint8),
-                      "flag" : np.full(max_rows, -10, dtype=np.int8)}
+            kwargs = {"x": np.zeros(max_rows, dtype=np.float32),
+                      "alleles": np.zeros((max_rows, 4), dtype=np.uint8),
+                      "flag": np.full(max_rows, -10, dtype=np.int8)}
         else:
             kwargs = dict()
-        cols = Columns(ID, maternal_ID, paternal_ID, time, sex, filled_rows,
-                       max_rows, **kwargs)
+        cols = Columns(filled_rows, max_rows, ID=ID, maternal_ID=maternal_ID,
+                       paternal_ID=paternal_ID, time=time, **kwargs)
         g = params.g
         t = params.g
         return cls(cols, params, g, t)
@@ -763,7 +767,7 @@ class Trial:
         self.t = params.g
 
         self.params = params
-        self.pedigree_table = PedigreeTable.initialize(params)
+        self.pedigree_table = PedigreeTable.initialize_full(params)
         self.run()
 
     def run(self):
@@ -781,6 +785,7 @@ class Trial:
         if self.plot_int:
             self.set_figure_legend()
             self.figure.show()
+        self.pedigree_table.truncate()
         print("simulation complete")
 
     def cycle(self, parent_table):
