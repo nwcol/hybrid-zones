@@ -1,0 +1,33 @@
+executable = hybzones/scripts/run.sh
+
+
+#Arguments
+#	1 cluster id (ignore) the id associated with the batch
+#	2 process id (ignore) the id associated with the trial
+
+arguments = $(ClusterId) $(ProcId)
+
+
+should_transfer_files = YES
+
+#Input files
+#	python import
+#	python packages
+#	hybzones : the hybzones python module
+
+transfer_input_files = http://proxy.chtc.wisc.edu/SQUID/chtc/el8/python39.tar.gz, packages.tar.gz, hybzones
+when_to_transfer_output = ON_EXIT
+
+log = logs/hyb_$(ClusterId)_$(ProcId).log
+output = out/hyb_$(ClusterId)_$(ProcId).out
+error = errs/hyb_$(ClusterId)_$(ProcId).err
+
+
+request_cpus = 1
+
+request_memory = 1GB
+
+request_disk = 1GB
+
+queue 1
+

@@ -4,9 +4,11 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from diploid import math_fxns
+import os
 
-from diploid import plot_util
+from hybzones import math_util
+
+from hybzones import plot_util
 
 plt.rcParams['figure.dpi'] = 400
 
@@ -49,14 +51,14 @@ class Params:
         self.mid_2 = 0.5
 
         # scripting
-        self.task = "get_pedigree_table"
+        self.script = "get_multi_window"
 
         # genetics parameters
         self.sample_sizes = [50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
         self.sample_bins = [[0.0, 0.1], [0.1, 0.2], [0.2, 0.3], [0.3, 0.4],
                             [0.4, 0.5], [0.5, 0.6], [0.6, 0.7], [0.7, 0.8],
                             [0.8, 0.9], [0.9, 1.0]]
-        self.time_cutoffs = (None, None)
+        self.time_cutoffs = [None, None]
         self.n_windows = 10
         self.mig_rate = 1e-4
         self.seq_length = 1e4
@@ -66,12 +68,16 @@ class Params:
         self.rooted = True
 
     @classmethod
-    def load(cls, filename):
+    def load(cls, filename, param_dir=None):
         """
         Load a dictionary representation of a params class instance from a
         .json file, initialize a new instance and fill its fields with the
         values from the file
         """
+        if not param_dir:
+            base_dir = os.getcwd().replace(r"\hybzones", "") + r"\hybzones"
+            param_dir = base_dir + "\\parameters\\"
+        filename = param_dir + filename
         file = open(filename, 'r')
         param_dict = json.load(file)
         file.close()
@@ -153,11 +159,14 @@ class Params:
         return f"params = Params({self.K}, {self.g}, {self.c}) \n" + string
 
     def save(self, filename):
-        """Write a dictionary representation of the params class instance in
-        a .json file
         """
+        Write a dictionary representation of the params class instance in a
+        .json file in the directory hybzones/parameters
+        """
+        base_dir = os.getcwd().replace(r"\hybzones", "") + r"\hybzones"
+        param_dir = base_dir + "\\parameters\\"
+        filename = param_dir + filename
         param_dict = vars(self)
-        filename = "param_files/" + filename
         file = open(filename, 'w')
         json.dump(param_dict, file, indent=0)
         file.close()
@@ -221,7 +230,7 @@ class Params:
                                          "environmental fitness")
         sub.legend(loc="lower left")
 
-    def plot_scale(params, center=0.5):
+    def plot_scale(self, center=0.5):
         """
         Make a plot of normal distributions with scales self.beta and self.delta
         to give a visualization of the scale of interactions in the space.
@@ -229,8 +238,8 @@ class Params:
         fig = plt.figure(figsize=(8,6))
         sub = fig.add_subplot(111)
         x = np.linspace(0, 1, 1000)
-        beta = math_fxns.compute_pd(x - center, params.beta)
-        delta = math_fxns.compute_pd(x - center, params.delta)
+        beta = math_util.compute_pd(x - center, self.beta)
+        delta = math_util.compute_pd(x - center, self.delta)
         beta /= np.max(beta)
         delta /= np.max(delta)
         sub.plot(x, beta, color='red')

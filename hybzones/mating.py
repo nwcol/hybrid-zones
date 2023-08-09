@@ -1,6 +1,6 @@
 import numpy as np
 
-from diploid import math_fxns
+from hybzones import math_util
 
 
 def compute_pd(x, s):
@@ -8,23 +8,6 @@ def compute_pd(x, s):
     with standard deviation s, mean 0.
     """
     return 1 / (s * np.sqrt(2 * np.pi)) * np.exp(-0.5 * np.square(x / s))
-
-
-class Long:
-    """
-    Attempt to simulate mating without looping
-    """
-    def __init__(self, parent_table):
-        self.params = parent_table.params
-        self.id_map = IDmap(parent_table)
-        self.density_bounds = Bounds(parent_table, 0, -1,
-            limits=[-self.params.density_bound, self.params.density_bound])
-
-        self.mating_bounds = Bounds(parent_table, 0, 1,
-            limits=[-self.params.bound, self.params.bound])
-        self.pools = np.zeros(len(self.mating_bounds) + 1, dtype=np.int64)
-        self.pools[1:] = self.mating_bounds.get_bound_pops()
-        self.offsets = np.cumsum(self.pools)
 
 
 class IDmap:
@@ -43,64 +26,64 @@ class IDmap:
 
         :param generation_table:
         """
-        self.absolute = generation_table.cols.ID
-        self.relative = np.arange(generation_table.cols.filled_rows)
+        self.abs = generation_table.cols.id
+        self.rel = np.arange(generation_table.cols.filled_rows)
         self.female_index = generation_table.cols.get_sex_index(target_sex=0)
         self.male_index = generation_table.cols.get_sex_index(target_sex=1)
 
-    def relative_to_absolute(self, relative_IDs):
+    def rel_to_abs(self, rel_ids):
         """
         Map relative IDs to absolute IDs
 
-        :param relative_IDs:
+        :param rel_ids:
         :return:
         """
-        return self.absolute[relative_IDs]
+        return self.abs[rel_ids]
 
-    def female_to_absolute(self, relative_female_IDs):
+    def female_to_abs(self, female_ids):
         """
         Map relative female IDs to absolute IDs.
 
-        :param relative_female_IDs:
+        :param relative_female_ids:
         :return:
         """
-        return self.absolute[self.female_to_relative(relative_female_IDs)]
+        return self.abs[self.female_to_rel(female_ids)]
 
-    def female_to_relative(self, relative_female_IDs):
+    def female_to_rel(self, female_ids):
         """
         Map relative female IDs to relative generation IDs.
         see :male_to_relative:
 
-        :param relative_female_IDs:
+        :param female_ids:
         :return:
         """
-        return self.female_index[relative_female_IDs]
+        return self.female_index[female_ids]
 
-    def male_to_absolute(self, relative_male_IDs):
+    def male_to_abs(self, male_ids):
         """
-        Map relative female IDs to absolute IDs.
+        Map relative male IDs to absolute IDs.
 
-        :param relative_female_IDs:
+        :param male_ids:
         :return:
         """
-        return self.absolute[self.male_to_relative(relative_male_IDs)]
+        return self.abs[self.male_to_rel(male_ids)]
 
-    def male_to_relative(self, relative_male_IDs):
+    def male_to_rel(self, male_ids):
         """
         Map relative male IDs to relative generation IDs
 
-        >>>IDmap.male_to_relative(10)
+        >>>IDmap.male_to_rel(10)
         Out: 17
 
-        >>>IDmap.male_to_relative([10, 20])
+        >>>IDmap.male_to_rel([10, 20])
         Out: array([17, 34], dtype=int64)
 
-        >>>IDmap.male_to_relative(np.array([10, 20, 21]))
+        >>>IDmap.male_to_rel(np.array([10, 20, 21]))
         Out: array([17, 34, 35], dtype=int64)
 
         :return: relative IDs
         """
-        return self.male_index[relative_male_IDs]
+        return self.male_index[male_ids]
 
 
 class Bounds:
@@ -142,52 +125,29 @@ class Bounds:
 
 class Matings:
     """
-    It is useful to define two types of 'relative ID' for the purposes of
-    simulating mating and mate choice. Note that x-positions are unchangeable
-    after dispersal and that we require that after dispersal, generations be
-    sorted by increasing x-position
-
-    1. relative ID. the index of an individual within the x-sorted generation
-        with K = 10,000 these should range from 0 to approx. 10,000.
-
-    2. relative in-sex ID. the index of an individual within the x-sorted
-        sex subset of the generation. These should range from 0 to about 5,000
-        with K = 10,000.
-
-    We separate the generation into sexes. The IDs retrieved by mating are
-    sex-relative. These are then mapped to relative IDs to easily access
-    parent character (eg x-position and genotypes), and then to absolute IDs
-    for the assignment of maternal and paternal IDs.
-
-    ABSOLUTE ID vs relative id. vs relative sex id
-        relative id: within the sorted generation
-        (positions must be immutable after dispersal)
-        relative sex id: within the sorted sex subset of a generation
-        absolute id: the assigned id.
-
-    steps to mating
-    -compute pop densities -> get expected n offspring
-     -> get actual n offspring
-    -
-    -compute idx bounds for female mate access
-    -compute mating pdfs (cdfs too) for mate choice
-    -mate choice. add lower idx bound
-    (this all done with relative ids)
 
     """
 
     def __init__(self, parent_table):
         self.params = parent_table.params
-        self.id_map = IDmap(parent_table)
-        self.n_offspring = self.compute_n_offspring(parent_table)
+        living_index = parent_table.living_index
+        living_mask = parent_table.living_mask
+        # mask the parent generation table so it contains only living organisms
+        breeder_table = parent_table[living_mask]
+        self.id_map = IDmap(breeder_table)
+        self.n_offspring = self.compute_n_offspring(breeder_table)
         self.n = np.sum(self.n_offspring)
-        self.mating_bounds = Bounds(parent_table, 0, 1,
-                limits=[-self.params.bound, self.params.bound])
-        maternal_ids, paternal_ids = self.go(parent_table)
-        self.maternal_ids = self.id_map.female_to_relative(maternal_ids)
-        self.paternal_ids = self.id_map.male_to_relative(paternal_ids)
-        self.abs_maternal_ids = self.id_map.relative_to_absolute(self.maternal_ids)
-        self.abs_paternal_ids = self.id_map.relative_to_absolute(self.paternal_ids)
+        self.mating_bounds = Bounds(breeder_table, 0, 1, limits=[
+            -self.params.bound, self.params.bound])
+        rel_mat_ids, rel_pat_ids = self.run(breeder_table)
+        # to relative id in the breeding table
+        mat_ids = self.id_map.female_to_rel(rel_mat_ids)
+        pat_ids = self.id_map.male_to_rel(rel_pat_ids)
+        # to relative id in the parent table
+        self.maternal_ids = living_index[mat_ids]
+        self.paternal_ids = living_index[pat_ids]
+        self.abs_maternal_ids = parent_table.cols.id[self.maternal_ids]
+        self.abs_paternal_ids = parent_table.cols.id[self.paternal_ids]
 
     def compute_n_offspring(self, parent_table):
         """
@@ -222,10 +182,7 @@ class Matings:
         Compute indices to select the correct preference vector index for each
         female's preference: B1B1 0, B1B2 1, B2B2 2
         """
-        pref_sums = np.sum(generation_table.cols.B_alleles[
-            self.id_map.female_index], axis=1)
-        pref_idx = pref_sums - 2
-        return pref_idx
+        return generation_table.cols.preference[self.id_map.female_index]
 
     def compute_pref_matrix(self, generation_table):
         """
@@ -233,8 +190,7 @@ class Matings:
         Preference vecs are combined in a 2d array in the order B1B1, B1B2,
         B2B2
         """
-        signals = np.sum(generation_table.cols.A_alleles[
-            self.id_map.male_index], axis=1) - 2
+        signals = generation_table.cols.signal[self.id_map.male_index]
         n = len(self.id_map.male_index)
         pref_matrix = np.full((n, 3), 1, dtype=np.float32)
         c_matrix = self.params.get_c_matrix()
@@ -242,7 +198,7 @@ class Matings:
             pref_matrix[:, i] = c_matrix[signals, i]
         return pref_matrix
 
-    def go(self, generation_table):
+    def run(self, generation_table):
         female_x = generation_table.x[self.id_map.female_index]
         male_x = generation_table.x[self.id_map.male_index]
         pref_matrix = self.compute_pref_matrix(generation_table)
@@ -251,34 +207,71 @@ class Matings:
         paternal_ids = np.full(self.n, -1, dtype=np.int32)
         i = 0
         for f_id in np.arange(len(female_x)):
-            if self.n_offspring[f_id] > 0:
+            n_children = self.n_offspring[f_id]
+            if n_children > 0:
                 x = female_x[f_id]
-                m_id = self.gaussian(x, male_x,
-                                     pref_matrix[:, pref_index[f_id]],
-                                     self.mating_bounds.bounds[f_id])
-                maternal_ids[i:i + self.n_offspring[f_id]] = f_id
-                paternal_ids[i:i + self.n_offspring[f_id]] = m_id
-                i += self.n_offspring[f_id]
+                prefs = pref_matrix[:, pref_index[f_id]]
+                bounds = self.mating_bounds.bounds[f_id]
+                m_id = self.gaussian(x, male_x, prefs, bounds)
+                upper = i + n_children
+                maternal_ids[i:upper] = f_id
+                paternal_ids[i:upper] = m_id
+                i = upper
             else:
                 pass
         maternal_ids = maternal_ids[paternal_ids > -1]
         paternal_ids = paternal_ids[paternal_ids > -1]
         return maternal_ids, paternal_ids
 
-    def gaussian(self, x, male_x, pref_vec, bound):
+    def gaussian(self, x, male_x, prefs, bound):
         """
         A mating model where each female's chance to mate with a given male is
         weighted normally by distance and by the female's signal preference.
         """
         d_vec = x - male_x[bound[0]:bound[1]]
         p_vec = compute_pd(d_vec, self.params.beta)
-        p_vec *= pref_vec[bound[0]:bound[1]]
+        p_vec *= prefs[bound[0]:bound[1]]
         S = np.sum(p_vec)
         if S > 0:
             p_vec /= S
             cd = np.cumsum(p_vec)
             X = np.random.uniform()
             m_id = np.searchsorted(cd, X) + bound[0]
+        else:
+            m_id = -1
+        return m_id
+
+    def uniform(self, x, male_x, prefs, bound):
+        """
+        A mating function where females pick a mate with assortation within a
+        bound but without weighting by pairing distance
+        """
+        if bound[1] - bound[0] > 0:
+            p_vec = np.cumsum(prefs[bound[0]:bound[1]])
+            S = np.sum(p_vec)
+            p_vec /= S
+            cd = np.cumsum(p_vec)
+            X = np.random.uniform()
+            m_id = np.searchsorted(cd, X) + bound[0]
+        else:
+            m_id = -1
+        return m_id
+
+    def unbounded(self, x, male_x, prefs, bound):
+        """
+        Identical to the gaussian mating function except that it does not impose
+        spatial bounds on mate choice, making long-distance matings possible
+        but very improbable
+        """
+        d_vec = x - male_x
+        p_vec = math_util.compute_pd(d_vec, self.params.beta)
+        p_vec *= prefs
+        S = np.sum(p_vec)
+        if S > 0:
+            p_vec /= S
+            cd = np.cumsum(p_vec)
+            X = np.random.uniform()
+            m_id = np.searchsorted(cd, X)
         else:
             m_id = -1
         return m_id
@@ -307,55 +300,3 @@ class Matings:
         gametes[:, 1] = parent_table.cols.alleles[row_index, B_index]
         return gametes
 
-
-def gaussian(x, m_x_vec, pref_vec, bound, params):
-    """A mating model where each female's chance to mate with a given male is
-    weighted normally by distance and by the female's signal preference.
-    """
-    d_vec = x - m_x_vec[bound[0]:bound[1]]
-    p_vec = math_fxns.compute_pd(d_vec, params.beta)
-    p_vec *= pref_vec[bound[0]:bound[1]]
-    S = np.sum(p_vec)
-    if S > 0:
-        p_vec /= S
-        cd = np.cumsum(p_vec)
-        X = np.random.uniform()
-        m_id = np.searchsorted(cd, X) + bound[0]
-    else:
-        m_id = -1
-    return m_id
-
-
-def uniform(x, m_x_vec, pref_vec, bound, params):
-    """A mating function where females pick a mate with assortation within a
-    bound but without weighting by pairing distance
-    """
-    if bound[1] - bound[0] > 0:
-        p_vec = np.cumsum(pref_vec[bound[0]:bound[1]])
-        S = np.sum(p_vec)
-        p_vec /= S
-        cd = np.cumsum(p_vec)
-        X = np.random.uniform()
-        m_id = np.searchsorted(cd, X) + bound[0]
-    else:
-        m_id = -1
-    return m_id
-
-
-def unbounded(x, m_x_vec, pref_vec, bound, params):
-    """Identical to the gaussian mating function except that it does not impose
-    spatial bounds on mate choice, making long-distance matings possible
-    but very improbable
-    """
-    d_vec = x - m_x_vec
-    p_vec = math_fxns.compute_pd(d_vec, params.beta)
-    p_vec *= pref_vec
-    S = np.sum(p_vec)
-    if S > 0:
-        p_vec /= S
-        cd = np.cumsum(p_vec)
-        X = np.random.uniform()
-        m_id = np.searchsorted(cd, X)
-    else:
-        m_id = -1
-    return m_id

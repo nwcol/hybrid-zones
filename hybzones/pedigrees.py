@@ -4,17 +4,24 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+import sys
+
 import time
 
-from diploid_.parameters import Params
+from hybzones.parameters import Params
 
-from diploid_ import plot_util
+from hybzones import plot_util
 
-from diploid_ import mating_models
+from hybzones import mating
 
-from diploid_ import dispersal_models
+from hybzones import dispersal
 
-from diploid_ import fitness_models
+from hybzones import fitness
+
+
+if __name__ == "__main__":
+    plt.rcParams['figure.dpi'] = 100
+    matplotlib.use('Qt5Agg')
 
 
 """
@@ -59,7 +66,7 @@ already implemented but worth checking.
 
 -__repr__, __str__ for pedigree and generation tables
 
--change sample zones back to a list of lists for easier use
+X-change sample zones back to a list of lists for easier use
 
 -when to sort by x and id for max consistency and least use
 
@@ -101,11 +108,13 @@ sampling
 -just set up multiwindows in a smarter and better way. improvements have 
 already made things a lot clearer
 
+-multiwindows plotting
+
 
 GENERAL
 -restructure the module and rename stuff. decide on final names
 
--write scripts to run basic multi-window stuff
+X-write scripts to run basic multi-window stuff
 
 -get those scripts running! get results
 
@@ -114,6 +123,11 @@ GENERAL
 X-renovate parameters
 
 -implement cline pars
+
+-get everything set up to be able to make many slices over the same 
+pedigree and run coalescence on each
+
+-full matings functionality
 
 """
 
@@ -127,9 +141,9 @@ class Columns:
     # these are the columns essential to the function of the pedigree. they
     # are therefore mandatory to instantiate a Columns instance. time is
     # arguably not needed but its inclusion is very convenient
-    _col_names = ["ID",
-                  "maternal_ID",
-                  "paternal_ID",
+    _col_names = ["id",
+                  "maternal_id",
+                  "paternal_id",
                   "time"]
 
     def __init__(self, filled_rows, max_rows, **kwargs):
@@ -150,9 +164,9 @@ class Columns:
         """
         # this clarifies the data types each array should have. these are
         # checked during initialization to ensure proper behavior
-        types = {"ID": np.int32,
-                 "maternal_ID": np.int32,
-                 "paternal_ID": np.int32,
+        types = {"id": np.int32,
+                 "maternal_id": np.int32,
+                 "paternal_id": np.int32,
                  "time": np.int32,
                  "sex": np.uint8,  # takes only 0, 1
                  "x": np.float32,
@@ -172,9 +186,9 @@ class Columns:
             if _col_name not in kwargs:
                 raise ValueError(f"kwargs did not include column {_col_name}")
 
-        self.ID = kwargs["ID"]
-        self.maternal_ID = kwargs["maternal_ID"]
-        self.paternal_ID = kwargs["paternal_ID"]
+        self.id = kwargs["id"]
+        self.maternal_id = kwargs["maternal_id"]
+        self.paternal_id = kwargs["paternal_id"]
         self.time = kwargs["time"]
         if "sex" in kwargs:
             self.sex = kwargs["sex"]
@@ -205,9 +219,9 @@ class Columns:
         :return:
         """
         kwargs = dict()
-        kwargs["ID"] = np.zeros(max_rows, dtype=np.int32)
-        kwargs["maternal_ID"] = np.zeros(max_rows, dtype=np.int32)
-        kwargs["paternal_ID"] = np.zeros(max_rows, dtype=np.int32)
+        kwargs["id"] = np.zeros(max_rows, dtype=np.int32)
+        kwargs["maternal_id"] = np.zeros(max_rows, dtype=np.int32)
+        kwargs["paternal_id"] = np.zeros(max_rows, dtype=np.int32)
         kwargs["time"] = np.full(max_rows, -1, dtype=np.int32)
         if "sex" in col_names:
             kwargs["sex"] = np.zeros(max_rows, dtype=np.uint8)
@@ -290,11 +304,11 @@ class Columns:
         _spacer = [""]
         for col_name, length in zip(self.col_names, lengths):
             _header.append(f"{col_name : >{length}}")
-            _spacer.append("=" * length)
+            _spacer.append("-" * length)
         _header.append("")
         _spacer.append("")
         header = " | ".join(_header)
-        spacer = "=|=".join(_spacer)
+        spacer = "-|-".join(_spacer)
         return header, spacer
 
     def get_col_widths(self):
@@ -330,13 +344,13 @@ class Columns:
         Cols with 10000 filled rows of 10000 max rows in 8 columns
         >>>cols[10]
         Cols with 1 filled rows of 1 max rows in 8 columns
-        >>>cols[10].ID
+        >>>cols[10].id
         array([10])
         >>>cols[10:20]
         Cols with 10 filled rows of 10 max rows in 8 columns
         >>>cols[10, 20, 40, 100, 200]
         Cols with 5 filled rows of 5 max rows in 8 columns
-        >>>cols[10, 20, 40, 100, 200].ID
+        >>>cols[10, 20, 40, 100, 200].id
         array([ 10,  20,  40, 100, 200])
 
         :param index: the integer, slice, index or mask to access
@@ -400,20 +414,20 @@ class Columns:
     @property
     def parents(self):
         """
-        Return a 2d array of parent IDs
+        Return a 2d array of parent ids
 
         :return:
         """
-        return np.column_stack((self.maternal_ID, self.paternal_ID))
+        return np.column_stack((self.maternal_id , self.paternal_id))
 
     @property
-    def A_alleles(self):
+    def signal_alleles(self):
         if "alleles" not in self.col_names:
             raise AttributeError("no alleles columns exist in this instance")
         return self.alleles[:, [0, 1]]
 
     @property
-    def B_alleles(self):
+    def preference_alleles(self):
         if "alleles" not in self.col_names:
             raise AttributeError("no alleles columns exist in this instance")
         return self.alleles[:, [2, 3]]
@@ -441,8 +455,8 @@ class Columns:
     @property
     def allele_sums(self):
         sums = np.zeros((self.filled_rows, 2), dtype=np.uint8)
-        sums[:, 0] = np.sum(self.A_alleles, axis=1)
-        sums[:, 1] = np.sum(self.B_alleles, axis=1)
+        sums[:, 0] = np.sum(self.signal_alleles, axis=1)
+        sums[:, 1] = np.sum(self.preference_alleles, axis=1)
         return sums
 
     @property
@@ -454,13 +468,13 @@ class Columns:
                 & (allele_sums[:, 1] == Constants.allele_sums[i, 1])] = i
         return genotype
 
-    def apply_ID(self, i_0=0):
+    def apply_id(self, i_0=0):
         """
         Add ids to the array
 
         :return:
         """
-        self.ID += np.arange(self.max_rows) + i_0
+        self.id += np.arange(self.max_rows) + i_0
 
     def sort_by_x(self):
         """
@@ -531,6 +545,23 @@ class Columns:
             index = np.intersect1d(index, new)
         return index
 
+    def get_subpop_mask(self, **kwargs):
+        """
+        Return a mask of organisms with the characters defined in **kwargs
+        eg the intersection of masks for each kwarg
+
+        """
+        mask = np.full(len(self), True, dtype='bool')
+        for arg in kwargs:
+            if arg == 'x':
+                if kwargs[arg][1] < kwargs[arg][0]:
+                    raise ValueError("left bound exceeds right bound!")
+                new = (self.x >= kwargs[arg][0]) & (self.x < kwargs[arg][1])
+            else:
+                new = getattr(self, arg) == kwargs[arg]
+            mask *= new
+        return mask
+
     def get_subpop_size(self, **kwargs):
         """
         Return the number of organisms with character defined in **kwargs
@@ -585,7 +616,7 @@ class Columns:
         self.max_rows -= new_min
         self.filled_rows = self.max_rows
 
-    def asdict(self):
+    def as_dict(self):
         """
         Return a dict of columns
 
@@ -595,8 +626,55 @@ class Columns:
                     self.col_names}
         return col_dict
 
-    def save_txt(self):
-        pass
+    def as_arr(self):
+        """
+        Return a structured array holding the Columns instance
+
+        """
+        types = [("id", "i4"), ("maternal_id ", "i4"), ("paternal_id", "i4"),
+                 ("time", "i4")]
+        if "sex" in self.col_names:
+            types.append(("sex", "u1"))
+        if "x" in self.col_names:
+            types.append(("x", "f4"))
+        if "alleles" in self.col_names:
+            types.append(("A loc 0", 'u1'))
+            types.append(("A loc 1", 'u1'))
+            types.append(("B loc 0", 'u1'))
+            types.append(("B loc 1", 'u1'))
+        if "flag" in self.col_names:
+            types.append(("flag", "i1"))
+        col_names = [x[0] for x in types]
+        dtype = np.dtype(types)
+        arr = np.zeros(self.max_rows, dtype)
+        arr["id"] = self.id
+        arr["maternal_id "] = self.maternal_id 
+        arr["paternal_id"] = self.paternal_id
+        arr["time"] = self.time
+        if "sex" in self.col_names:
+            arr["sex"] = self.sex
+        if "x" in self.col_names:
+            arr["x"] = np.round(self.x, 5)
+        if "alleles" in self.col_names:
+            arr["A loc 0"] = self.alleles[:, 0]
+            arr["A loc 1"] = self.alleles[:, 1]
+            arr["B loc 0"] = self.alleles[:, 2]
+            arr["B loc 1"] = self.alleles[:, 3]
+        if "flag" in self.col_names:
+            arr["flag"] = self.flag
+        return arr, col_names
+
+    def save_txt(self, filename):
+        """
+        Get a structured array of the Columns instance and save it at
+        filename
+
+        """
+        arr, col_names = self.as_arr()
+        header = "".join([f"{x : >12}" for x in col_names])[3:]
+        file = open(filename, 'w')
+        np.savetxt(file, arr, '%11s', header=header)
+        file.close()
 
     def save_ped(self):
         """
@@ -620,17 +698,12 @@ class Columns:
     def load_npz(cls, filename):
         archive = np.load(filename)
         col_names = archive.files
-        ID = archive["ID"]
-        maternal_ID = archive["maternal_ID"]
-        paternal_ID = archive["paternal_ID"]
-        time = archive["time"]
-        sex = archive["sex"]
-        n = archive.max_header_size
+        filled_rows = archive.max_header_size
+        max_rows = archive.max_header_size
         kwargs = dict()
         for col_name in col_names:
-            if col_name not in cls._col_names:
-                kwargs[col_name] = archive[col_name]
-        return cls(ID, maternal_ID, paternal_ID, time, sex, n, n, **kwargs)
+            kwargs[col_name] = archive[col_name]
+        return cls(filled_rows, max_rows, **kwargs)
 
 
 class Table:
@@ -712,10 +785,10 @@ class GenerationTable(Table):
         create the founding generation
         """
         n = params.N
-        ID = np.full(n, 0, dtype=np.int32)
+        id = np.full(n, 0, dtype=np.int32)
         time = np.full(n, params.g, dtype=np.int32)
-        maternal_ID = np.full(n, -1, dtype=np.int32)
-        paternal_ID = np.full(n, -1, dtype=np.int32)
+        maternal_id  = np.full(n, -1, dtype=np.int32)
+        paternal_id = np.full(n, -1, dtype=np.int32)
         sex = np.random.choice(np.array([0, 1], dtype=np.uint8), size=n)
         alleles_ = []
         x_ = []
@@ -728,21 +801,38 @@ class GenerationTable(Table):
         alleles = np.vstack(alleles_)
         x = np.concatenate(x_)
         flag = np.full(n, 1, dtype=np.int8)
-        cols = Columns(n, n, ID=ID, maternal_ID=maternal_ID,
-                       paternal_ID=paternal_ID, time=time, sex=sex, x=x,
+        cols = Columns(n, n, id=id, maternal_id =maternal_id,
+                       paternal_id=paternal_id, time=time, sex=sex, x=x,
                        alleles=alleles, flag=flag)
         cols.sort_by_x()
-        cols.apply_ID()
+        cols.apply_id()
         t = params.g
         return cls(cols, params, t)
 
-    def __repr__(self):
-        return (f"GenerationTable at t = {self.t}, self.cols: \n"
-                + self.cols.__repr__())
+    @classmethod
+    def mate(cls, parent_generation_table):
+        """
+        Form a new generation by mating in the previous generation
 
-    def __str__(self):
-        return (f"GenerationTable at t = {self.t}, self.cols: \n"
-                + self.cols.__str__())
+        :param parent_generation_table:
+        :return:
+        """
+        t = parent_generation_table.t - 1
+        matings = mating.Matings(parent_generation_table)
+        n = matings.n
+        id = np.zeros(n, dtype=np.int32) # do later
+        maternal_id = matings.abs_maternal_ids
+        paternal_id = matings.abs_paternal_ids
+        time = cls.get_time_col(n, t)
+        sex = cls.get_random_sex(n)
+        x = parent_generation_table.cols.x[matings.maternal_ids]
+        alleles = matings.get_zygotes(parent_generation_table)
+        flag = np.full(n, 1, dtype=np.int8)
+        cols = Columns(n, n, id=id, maternal_id =maternal_id,
+                       paternal_id=paternal_id, time=time, sex=sex, x=x,
+                       alleles=alleles, flag=flag)
+        params = parent_generation_table.params
+        return cls(cols, params, t)
 
     @classmethod
     def from_cols(cls, cols, params, t):
@@ -755,30 +845,14 @@ class GenerationTable(Table):
         """
         return cls(cols, params, t)
 
-    @classmethod
-    def mate(cls, parent_generation_table):
-        """
-        Form a new generation by mating in the previous generation
+    def __repr__(self):
+        return (f"GenerationTable at t = {self.t}, self.cols: \n"
+                + self.cols.__repr__())
 
-        :param parent_generation_table:
-        :return:
-        """
-        t = parent_generation_table.t - 1
-        matings = mating_models.Matings(parent_generation_table)
-        n = matings.n
-        ID = np.zeros(n, dtype=np.int32) # do later
-        maternal_ID = matings.abs_maternal_ids
-        paternal_ID = matings.abs_paternal_ids
-        time = cls.get_time_col(n, t)
-        sex = cls.get_random_sex(n)
-        x = parent_generation_table.cols.x[matings.maternal_ids]
-        alleles = matings.get_zygotes(parent_generation_table)
-        flag = np.full(n, 1, dtype=np.int8)
-        cols = Columns(n, n, ID=ID, maternal_ID=maternal_ID,
-                       paternal_ID=paternal_ID, time=time, sex=sex, x=x,
-                       alleles=alleles, flag=flag)
-        params = parent_generation_table.params
-        return cls(cols, params, t)
+    def __str__(self):
+        return (f"GenerationTable at t = {self.t}, self.cols: \n"
+                + self.cols.__str__())
+
 
     @staticmethod
     def get_random_sex(n):
@@ -797,24 +871,32 @@ class GenerationTable(Table):
     @property
     def living_mask(self):
         """
-        Return the indices of individuals with flag=1
+        Return a mask for individuals with flag=1
 
         :return:
         """
+        return self.cols.get_subpop_mask(flag=1)
+
+    @property
+    def living_index(self):
+        """
+        Return the indices of individuals with flag=1
+
+        """
         return self.cols.get_subpop_index(flag=1)
 
-    def set_flags(self, idx, flag):
+    def set_flag(self, index, flag):
         """
         This is present only in the generation table because no other table
         should set flags
 
-        :param idx:
+        :param index:
         :param flag:
         :return:
         """
         if "flag" not in self.cols.col_names:
             raise AttributeError("no flags column exists")
-        self.cols.flag[idx] = flag
+        self.cols.flag[index] = flag
 
     def senescence(self):
         """
@@ -822,7 +904,7 @@ class GenerationTable(Table):
 
         :return:
         """
-        self.cols.flag[self.living_mask] = 0
+        self.set_flag(self.living_index, 0)
 
     def plot(self):
         gen_arr = GenotypeArr.from_generation(self)
@@ -832,7 +914,7 @@ class GenerationTable(Table):
 
 class PedigreeTable(Table):
 
-    size_factor = 1.02
+    size_factor = 1.04
 
     def __init__(self, cols, params, t, g):
         super().__init__(cols, params)
@@ -848,7 +930,6 @@ class PedigreeTable(Table):
         :param col_names:
         :return:
         """
-        filled_rows = 0
         max_rows = int(params.K * (params.g + 1) * cls.size_factor)
         cols = Columns.initialize(max_rows, col_names)
         g = params.g
@@ -953,10 +1034,10 @@ class Trial:
         generation_table = GenerationTable.mate(parent_table)
         parent_table.senescence()
         self.pedigree_table.append_generation(parent_table)
-        dispersal_models.disperse(generation_table)
-        fitness_models.main(generation_table)
+        dispersal.disperse(generation_table)
+        fitness.main(generation_table)
         generation_table.cols.sort_by_x()
-        generation_table.cols.apply_ID(i_0=self.pedigree_table.filled_rows)
+        generation_table.cols.apply_id(i_0=self.pedigree_table.filled_rows)
         self.report()
         if self.plot_int:
             if self.t % self.plot_int == 0:
@@ -1184,7 +1265,7 @@ class GenotypeArr:
         c = Constants.genotype_colors
         for i in np.arange(9):
             sub.plot(b, self.arr[t, :, i], color=c[i], linewidth=2, marker="x")
-        y_max = self.params.K * 1.3 * self.bin_size
+        y_max = self.params.K * 1.35 * self.bin_size
         n = str(self.get_generation_size(t))
         if len(self) == 1:
             time = self.t
@@ -1462,12 +1543,9 @@ class Constants:
                                 [[0, 2], [0, 2]]], dtype=np.uint8)
 
 
-plt.rcParams['figure.dpi'] = 100
-matplotlib.use('Qt5Agg')
-
-
-#params = Params(10_000, 10, 0.1)
-#gen = GenerationTable.get_founding(params)
-##cols = gen.cols
-#trial = Trial(params, plot_int=1)
-
+# debug
+if __name__ == "__main__":
+    params = Params(10_000, 10, 0.1)
+    trial = Trial(params, plot_int=1)
+    cols = trial.pedigree_table.cols
+    gen = trial.pedigree_table.get_generation(0)

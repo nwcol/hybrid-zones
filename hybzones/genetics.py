@@ -1,22 +1,18 @@
-from IPython.display import display, SVG
-
 import numpy as np
 
 import networkx as nx
 
-import matplotlib.pyplot as plt
-
 import msprime
 
-import tskit
+import os
 
-import time
+from hybzones.pedigrees import *
+# not good
 
-from diploid_ import parameters
 
-from diploid_.parameters import Params
-
-from diploid_.popmodel import *
+if __name__ == "__main__":
+    plt.rcParams['figure.dpi'] = 100
+    matplotlib.use('Qt5Agg')
 
 
 def explicit_coalescent(tc, params):
@@ -147,14 +143,14 @@ class SamplePedigreeTable(PedigreeTable):
             sample = pedigree_table[parent_ids]
             self.reverse_append(sample)
         self.reverse_truncate()
-        old_ID = self.cols.ID
-        self.old_ID = np.copy(old_ID)
-        new_ID = np.arange(len(self.cols), dtype=np.int32)
-        for col_name in ["maternal_ID", "paternal_ID"]:
+        old_id = self.cols.id
+        self.old_id = np.copy(old_id)
+        new_id = np.arange(len(self.cols), dtype=np.int32)
+        for col_name in ["maternal_id", "paternal_id"]:
             column = getattr(self.cols, col_name)
             mask = column > -1  # we must filter out -1 values
-            column[mask] = self.remap_ids(column[mask], old_ID, new_ID)
-        self.cols.ID[:] = new_ID
+            column[mask] = self.remap_ids(column[mask], old_id, new_id)
+        self.cols.id[:] = new_id
 
     def sample_last_gen(self, pedigree_table, sample_ids):
         """
@@ -166,7 +162,7 @@ class SamplePedigreeTable(PedigreeTable):
         """
         last_gen = pedigree_table.get_generation(self.time_index[0])
         sample = last_gen[sample_ids]
-        sample = sample[sample.cols.ID.argsort()]  # sort by ID
+        sample = sample[sample.cols.id.argsort()]  # sort by ID
         return sample
 
     def get_last_gen_ids(self, last_gen):
@@ -206,18 +202,18 @@ class SamplePedigreeTable(PedigreeTable):
         self.cols.reverse_truncate(new_min)
 
     @staticmethod
-    def remap_ids(ID_col, old_ID, new_ID):
+    def remap_ids(id_col, old_id, new_id):
         """
         Remap the IDs in ID_col using the map old_ID[i] -> new_ID[i], eg
         from a column of increasing integers with gaps to one without gaps
 
-        :param ID_col: the column undergoing mapping
-        :param old_ID: the domain of the map
-        :param new_ID: the codomain of the map
+        :param id_col: the column undergoing mapping
+        :param old_id: the domain of the map
+        :param new_id: the codomain of the map
         :return:
         """
-        index = np.searchsorted(old_ID, ID_col)
-        return new_ID[index]
+        index = np.searchsorted(old_id, id_col)
+        return new_id[index]
 
     def get_generation_sizes(self):
         """
@@ -234,7 +230,7 @@ class SamplePedigreeTable(PedigreeTable):
         Build a pedigree table collection from the sample pedigree array
         """
         ped_tc = msprime.PedigreeBuilder(demography=self.demography)
-        # INDS
+        #  INDS
         n = len(self)
         ind_flag = self.cols.flag.astype(np.uint32)
         parents = np.ravel(self.cols.parents)
@@ -302,7 +298,20 @@ class SamplePedigreeTable(PedigreeTable):
         ind_pops[pop2_index] = 2
         return ind_pops
 
-    def messedupget_three_pop_inds(self):
+    def get_three_pop_inds00(self):
+        """
+        TEST OLD BUG
+
+        """
+        # extremely serious bug! lmao. also no time indexing....
+        n = len(self)
+        pops = np.zeros(n, dtype=np.int32)
+        genotype = self.genotype
+        pops[genotype == 1] = 1 ### here
+        pops[genotype == 8] = 2
+        return pops
+
+    def threepop_failure(self):
         # extremely serious bug! lmao. also no time indexing....
         n = len(self)
         ind_pops = np.zeros(n, dtype=np.int32)
@@ -320,7 +329,7 @@ class SamplePedigreeTable(PedigreeTable):
         ind_pops = np.zeros(n, dtype=np.int32)
         return ind_pops
 
-    def draw(self):
+    def draw(self, x_lim=None):
         """
         Draw a pedigree tree collection as a network using networkx
         """
@@ -329,7 +338,7 @@ class SamplePedigreeTable(PedigreeTable):
         M = nx.DiGraph()
         genotype = self.cols.genotype
         parents = self.cols.parents
-        for id in self.cols.ID:
+        for id in self.cols.id:
             time = self.cols.time[id]
             geno = genotype[id]
             G.add_node(id, time=time, genotype=geno)
@@ -361,7 +370,11 @@ class SamplePedigreeTable(PedigreeTable):
         # nx.draw_networkx_labels(M, pos, font_size = 7)
         ax.tick_params(left=True, bottom=True, labelleft=True,
                        labelbottom=True)
-        ax.set_xlim(0,1)
+        if x_lim:
+            ax.set_xlim(x_lim[0], x_lim[1])
+        else:
+            ax.set_xlim(0,1)
+        fig.show()
 
 
 class SampleSet:
@@ -487,7 +500,7 @@ class MultiWindow:
         """
         sample_sets = []
         last_gen = sample_pedigree_table.get_generation(0)
-        full_gen_ids = last_gen.cols.ID  # all absolute ids
+        full_gen_ids = last_gen.cols.id  # all absolute ids
         for sample_bin in self.sample_bins:
             relative_ids = last_gen.cols.get_subpop_index(x=sample_bin)
             abs_ids = full_gen_ids[relative_ids]
@@ -505,7 +518,7 @@ class MultiWindow:
         """
         genotype_sample_sets = []
         last_gen = sample_pedigree_table.get_generation(0)
-        full_gen_ids = last_gen.cols.ID
+        full_gen_ids = last_gen.cols.id
         for geno in np.arange(Constants.n_genotypes):
             genotype_sets = []
             for sample_bin in self.sample_bins:
@@ -590,13 +603,273 @@ class MultiWindow:
                  genotype_pi=self.genotype_pi, param_arr=param_arr)
 
 
-params = Params(10_000, 10, 0.1)
+class MultiWindows:
+    """
+    Class holding many instances of MultiWindow
+    """
 
-params.recombination_rate = 0
-params.n_windows = 2
-params.rooted = False
+    def __init__(self, multi_window_list):
+        self.params = multi_window_list[0].params
+        self.n = len(multi_window_list)
+        self.n_bins = len(multi_window_list[0].pi)
+        # objects holding all data
+        self.pi_list = []
+        self.pi_xy_list = []
+        self.genotype_pi_list = []
+        for multi_window in multi_window_list:
+            self.pi_list.append(multi_window.pi)
+            self.pi_xy_list.append(multi_window.pi_xy)
+            self.genotype_pi_list.append(multi_window.genotype_pi)
+        self.pi_arr = np.stack(self.pi_list, axis=0)
+        self.pi_xy_arr = np.stack(self.pi_xy_list, axis=0)
+        self.genotype_pi_arr = np.stack(self.genotype_pi_list, axis=0)
 
-trial = Trial(params)
-sample = SamplePedigreeTable.from_trial(trial)
-tc = sample.get_tc()
-ts = explicit_coalescent(tc, params)
+    @classmethod
+    def load_dir(cls, directory):
+        """
+        Directory is assumed to be in hybzones/data
+        """
+        base_dir = os.getcwd().replace(r"\hybzones", "") + r"\hybzones"
+        directory = base_dir + "\\data\\" + directory + "\\"
+        file_names = os.listdir(directory)
+        file_names = [directory + filename for filename in file_names]
+        multi_window_list = []
+        for file_name in file_names:
+            multi_window_list.append(MultiWindow.load(file_name))
+        return cls(multi_window_list)
+
+    @property
+    def mean_trial_pi(self):
+        """
+        Get the mean pi within each trial
+        """
+        return np.mean(self.pi_arr, axis=1)
+
+    @property
+    def mean_trial_pi_xy(self):
+        """
+        Get the mean pi_xy within each trial
+        """
+        return np.mean(self.pi_xy_arr, axis=1)
+
+    @property
+    def mean_trial_genotype_pi(self):
+        """
+        Get the genotype pis within each trial
+        """
+        return np.mean(self.genotype_pi_arr, axis=1)
+
+    @property
+    def mean_pi(self):
+        """
+        The mean pi between all trials
+        """
+        return np.mean(self.mean_trial_pi, axis=0)
+
+    @property
+    def mean_pi_xy(self):
+
+        return np.mean(self.mean_trial_pi_xy, axis=0)
+
+    def plot_pi(self, title=None, ylim=None):
+        """
+        Plot an array of pi vectors using violin plots and error bars for the
+        mean diversities.
+        """
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        mean_pi = self.mean_trial_pi
+        n = np.shape(mean_pi)[0]
+        n_bins = np.shape(mean_pi)[1]
+        bin_width = 1 / n_bins
+        x = np.round(np.arange(0, 1, 1 / n_bins), decimals=3)
+        parts = sub.violinplot(mean_pi, positions=x, widths=bin_width / 2,
+                               showextrema=False)
+        sub.scatter(x, np.median(mean_pi, axis=0), color="black",
+                    label="medians", marker='^')
+        means = np.mean(mean_pi, axis=0)
+        sub.errorbar(x, means, yerr=np.std(mean_pi, axis=0), color="black",
+                     label="means", capsize=2)
+        for pc in parts['bodies']:
+            pc.set_facecolor('white')
+            pc.set_edgecolor('black')
+            pc.set_alpha(0.3)
+        sub.set_xlim(-0.1, 1)
+        if ylim:
+            sub.set_ylim(ylim)
+        else:
+            sub.set_ylim(np.min(mean_pi) * 0.98, np.max(mean_pi) * 1.02)
+        sub.legend(loc='upper right')
+        sub.set_xticks(np.arange(0, 1.1, 0.1))
+        sub.grid(visible=True)
+        sub.set_ylabel("nucleotide diversity")
+        sub.set_xlabel("spatial bin (left edge)")
+        if title:
+            sub.set_title(title + ", n = " + str(n))
+        fig.show()
+
+    def plot_mean_pi(self, ylim=None, title=None):
+        """
+        Plot the mean of each multi-window pi arr in self.pi_list
+        """
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        x = np.round(np.arange(0, 1, 1 / self.n_bins), decimals=3)
+        for i in np.arange(len(self.pi_list)):
+            means = np.mean(self.pi_list[i], axis=0)
+            stds = np.std(self.pi_list[i], axis=0)
+            n = str(np.shape(self.pi_list[i])[0])
+            sub.errorbar(x, means, yerr=stds, capsize=2, color="black")
+        sub.set_xlim(-0.1, 1)
+        if ylim:
+            sub.set_ylim(ylim)
+        sub.set_xticks(np.arange(0, 1.1, 0.1))
+        sub.grid(visible=True)
+        sub.set_ylabel("nucleotide diversity")
+        sub.set_xlabel("spatial bin (left edge)")
+        if title:
+            sub.set_title(title)
+
+    def plot_mean_genotype_pi(self, ylim=None):
+        """
+        Plot the mean genotype pis for each multi-window
+        """
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        x = np.round(np.arange(0, 1, 1 / self.n_bins), decimals=3)
+        for i in np.arange(self.n):
+            genotype_pi = self.mean_trial_genotype_pi[i]
+            for j in np.arange(Constants.n_genotypes):
+                sub.plot(x, genotype_pi[j], linewidth=2,
+                         color=Constants.genotype_colors[j])
+        sub.set_xticks(np.arange(0, 1.1, 0.1))
+        sub.set_xlim(-1 / self.n_bins, 1)
+        sub.grid(visible=True)
+        sub.set_ylabel("nucleotide diversity")
+        sub.set_xlabel("spatial bin (left edge)")
+        if ylim:
+            sub.set_ylim(ylim)
+
+    def plot_genotype_pi(self, ylim=None):
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        x = np.round(np.arange(0, 1, 1 / self.n_bins), decimals=3)
+        for i in np.arange(Constants.n_genotypes):
+            genotype_pis = self.mean_trial_genotype_pi[:, i]
+            parts = sub.violinplot(genotype_pis, positions=x, widths=0.05,
+                                    showextrema=False)
+            sub.scatter(x, np.median(genotype_pis, axis=0),
+                        color=Constants.genotype_colors[i])
+            for pc in parts['bodies']:
+                pc.set_facecolor(Constants.genotype_colors[i])
+                pc.set_edgecolor('black')
+                pc.set_alpha(0.3)
+        sub.set_xlim(-1 / self.n_bins, 1)
+        sub.grid(visible=True)
+        sub.set_ylabel("nucleotide diversity")
+        sub.set_xlabel("spatial bin (left edge)")
+        if ylim:
+            sub.set_ylim(ylim)
+
+    def plot_pi_xy(pi_XY, title=None):
+        """
+        Plot the mean of a set of divergence arrays using a heatmap
+        """
+        n = np.shape(pi_XY)[0]
+        Z = np.mean(pi_XY, axis=0)
+        std = np.std(pi_XY, axis=0)
+        shape = np.shape(Z)
+        y = x = np.round(np.arange(0, 1, 1 / shape[0]), decimals=3)
+        X, Y = np.meshgrid(x, y)
+        fig, ax = plt.subplots(figsize=(7.5, 6))
+        colormesh = ax.pcolormesh(X, Y, Z, cmap="plasma")
+        cbar = plt.colorbar(colormesh)
+        plt.xlabel("x coordinate bin")
+        plt.ylabel("x coordinate bin")
+        if title != None: ax.set_title(title + ", n = " + str(n))
+        print(Z[0, 0], std[0, 0])
+        print(Z[-1, -1], std[-1, -1])
+
+    ### plot ancestry AND heterozygosity: needs full pedigree #####################
+
+    def triangle_plot(pedigree, pi_matrix, pi_factor=1e5):
+
+        x = dip.get_lastgen(pedigree)[:, PedStruc.Col.x]
+        ancestries = dip.compute_ancestries(pedigree, plot=False)
+        n_bins = np.shape(pi_matrix)[1]
+        binsize = 1 / n_bins
+        right_binlims = np.arange(binsize, 1 + binsize, binsize)
+        midbins = right_binlims - binsize / 2
+        x_bins = np.searchsorted(right_binlims, x)
+        subpop_idx = dip.get_subpop_idx(pedigree[pedigree[:, 3] == 0])
+        mean_ancestries = np.zeros((9, n_bins))
+        for i in np.arange(9):
+            for j in np.arange(n_bins):
+                idx = np.where((subpop_idx == i) & (x_bins == j))[0]
+                mean_ancestries[i, j] = np.mean(ancestries[idx])
+        mean_ancestries[np.isnan(mean_ancestries)] = 0
+        pi_max = np.max(pi_matrix)
+        norm_pi_matrix = pi_matrix * pi_factor
+
+        cmap = lambda anc, pi: (1 - anc, pi * pi_factor, anc)
+
+        x = midbins
+        y = np.arange(9)
+        X, Y = np.meshgrid(x, y)
+        fig, ax = plt.subplots(figsize=(9, 6))
+        my_cmap = []
+        for i in np.arange(9):
+            for j in np.arange(n_bins):
+                if mean_ancestries[i, j] == 0:
+                    my_cmap.append([1, 1, 1])
+                else:
+                    my_cmap.append(
+                        cmap(mean_ancestries[i, j], pi_matrix[i, j]))
+        my_cmap = ListedColormap(my_cmap)
+
+        Z = np.reshape(np.arange(9 * n_bins), (9, n_bins))
+        colormesh = ax.pcolormesh(X, Y, Z, cmap=my_cmap)
+
+        for y in range(Z.shape[0]):
+            for x in range(Z.shape[1]):
+                if mean_ancestries[y, x] == 0: continue
+                plt.text((x + 0.5) * binsize, y,
+                         ("a" + '%.2f' % mean_ancestries[y, x]
+                          + "\n pi \n" + '%.4f' % norm_pi_matrix[y, x]),
+                         horizontalalignment='center', fontsize=4,
+                         verticalalignment='center', color="black"
+                         )
+
+        ax.set_yticks(np.arange(9), pars.subpop_legend)
+        ax.set_xticks(np.arange(0, 1.1, 0.1))
+        ax.set_xlabel("spatial bin")
+
+        plt.subplots_adjust(left=0.1, right=0.65, top=0.85)
+        cax = fig.add_axes([0.7, 0.55, 0.3, 0.3])
+        cp1 = np.linspace(0, 1)
+        cp2 = np.linspace(0, 1 / pi_factor)
+        Cp1, Cp2 = np.meshgrid(cp1, cp2)
+        # make RGB image, p1 to red channel, p2 to blue channel
+        Legend = np.dstack((1 - Cp1, Cp2 * pi_factor, Cp1))
+        # parameters range between 0 and 1
+        cax.imshow(Legend, origin="lower")
+        cax.autoscale(False)
+        cax.set_yticks(np.linspace(0, 49, 6, dtype=np.int32),
+                       np.round(np.linspace(0, 1 / pi_factor, 6), 7))
+        cax.set_xticks(np.linspace(0, 49, 6, dtype=np.int32),
+                       np.round(np.linspace(0, 1, 6), 2))
+        cax.set_xlabel("ancestry")
+        cax.set_ylabel("diversity")
+        cax.set_title("2D cmap legend", fontsize=10)
+
+
+# debug. tests important funcionalities and creates example objects
+if __name__ == "__main__":
+    params = Params(10_000, 10, 0.1)
+    params.sample_sizes = np.full(10, 2)
+    params.n_windows = 2
+    trial = Trial(params)
+    sample_pedigree = SamplePedigreeTable.from_trial(trial)
+    tc = sample_pedigree.get_tc()
+    ts0 = explicit_coalescent(tc, params)
+    ts1 = reconstructive_coalescent(ts0, params, sample_pedigree.demography)

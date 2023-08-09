@@ -11,7 +11,7 @@ def main(generation_table):
     if generation_table.params.intrinsic_fitness:
         intrinsic_fitness(generation_table)
     if generation_table.params.extrinsic_fitness:
-        intrinsic_fitness(generation_table)
+        extrinsic_fitness(generation_table)
 
 
 def intrinsic_fitness(generation_table):
@@ -28,7 +28,7 @@ def intrinsic_fitness(generation_table):
         hyb_index = generation_table.cols.get_subpop_index(signal=1, sex=1)
     u = np.random.uniform(0, 1, size=len(hyb_index))
     index = hyb_index[u > params.hyb_fitness]
-    generation_table.set_flags(index, -2)
+    generation_table.set_flag(index, -2)
 
 
 def extrinsic_fitness(generation_table):
@@ -41,10 +41,10 @@ def extrinsic_fitness(generation_table):
     flag = -1, preventing them from mating.
     """
     params = generation_table.params
-    mask = generation_table.living_mask # mask dead organisms so they
+    living_index = generation_table.living_index # mask dead organisms so they
     # aren't killed twice
-    living_cols = generation_table.cols[mask]
-    x = living_cols.x[mask]
+    living_cols = generation_table.cols[living_index]
+    x = living_cols.x[living_index]
     n = len(living_cols)
     if params.female_fitness:
         index_11 = living_cols.get_subpop_index(signal=0)
@@ -60,8 +60,8 @@ def extrinsic_fitness(generation_table):
     p[index_22] = 1 - 2 * s_2(x[index_22], params)
     u = np.random.uniform(0, 1, n)
     index = np.nonzero(u > p)[0]
-    real_index = mask[index]
-    generation_table.set_flags(real_index, -1)
+    real_index = living_index[index]
+    generation_table.set_flag(real_index, -1)
 
 
 def s_1(x, params):
