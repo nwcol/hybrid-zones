@@ -1,0 +1,119 @@
+{
+"N": 10000,
+"subpop_n": [
+5000,
+0,
+0,
+0,
+0,
+0,
+0,
+0,
+5000
+],
+"subpop_lims": [
+[
+0,
+0.5
+],
+[],
+[],
+[],
+[],
+[],
+[],
+[],
+[
+0.5,
+1
+]
+],
+"K": 10000,
+"r": 0.5,
+"g": 20,
+"c": 0.1,
+"pref_model": "undesirable",
+"beta": 0.005,
+"bound": 0.02,
+"mating_model": "gaussian",
+"delta": 0.01,
+"dispersal_model": "random",
+"edge_model": "closed",
+"d_scale": 2,
+"density_bound": 0.005,
+"intrinsic_fitness": false,
+"hyb_fitness": 1,
+"extrinsic_fitness": false,
+"female_fitness": false,
+"k_1": -20,
+"k_2": 20,
+"mu": 0.2,
+"mid_1": 0.5,
+"mid_2": 0.5,
+"script": "get_multi_window",
+"sample_sizes": [
+50,
+50,
+50,
+50,
+50,
+50,
+50,
+50,
+50,
+50
+],
+"sample_bins": [
+[
+0.0,
+0.1
+],
+[
+0.1,
+0.2
+],
+[
+0.2,
+0.3
+],
+[
+0.3,
+0.4
+],
+[
+0.4,
+0.5
+],
+[
+0.5,
+0.6
+],
+[
+0.6,
+0.7
+],
+[
+0.7,
+0.8
+],
+[
+0.8,
+0.9
+],
+[
+0.9,
+1.0
+]
+],
+"time_cutoffs": [
+null,
+null
+],
+"n_windows": 10,
+"mig_rate": 0.0001,
+"seq_length": 10000.0,
+"recombination_rate": 1e-08,
+"u": 1e-08,
+"demographic_model": "one_pop",
+"rooted": true
+}

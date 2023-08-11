@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-import sys
-
 import time
 
 from hybzones.parameters import Params
@@ -128,6 +126,12 @@ X-renovate parameters
 pedigree and run coalescence on each
 
 -full matings functionality
+
+-matings error-- reproduce?
+
+-getting ancestries
+
+-plotting death frequency in space
 
 """
 
@@ -739,7 +743,7 @@ class Table:
         :return:
         """
         nbytes = 0
-        col_dict = self.cols.asdict()
+        col_dict = self.cols.as_dict()
         nbytes += np.sum([col.nbytes for col in col_dict.values()])
         return nbytes
 

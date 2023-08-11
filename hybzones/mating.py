@@ -133,14 +133,14 @@ class Matings:
         living_index = parent_table.living_index
         living_mask = parent_table.living_mask
         # mask the parent generation table so it contains only living organisms
-        breeder_table = parent_table[living_mask]
-        self.id_map = IDmap(breeder_table)
-        self.n_offspring = self.compute_n_offspring(breeder_table)
+        living_table = parent_table[living_mask]
+        self.id_map = IDmap(living_table)
+        self.n_offspring = self.compute_n_offspring(living_table)
         self.n = np.sum(self.n_offspring)
-        self.mating_bounds = Bounds(breeder_table, 0, 1, limits=[
+        self.mating_bounds = Bounds(living_table, 0, 1, limits=[
             -self.params.bound, self.params.bound])
-        rel_mat_ids, rel_pat_ids = self.run(breeder_table)
-        # to relative id in the breeding table
+        rel_mat_ids, rel_pat_ids = self.run(living_table)
+        # to relative id in the living table
         mat_ids = self.id_map.female_to_rel(rel_mat_ids)
         pat_ids = self.id_map.male_to_rel(rel_pat_ids)
         # to relative id in the parent table
