@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 import scipy
@@ -8,7 +10,8 @@ from scipy.special import erfc
 
 import scipy.optimize as opt
 
-import math
+import time
+
 
 
 def compute_pd(x, s):

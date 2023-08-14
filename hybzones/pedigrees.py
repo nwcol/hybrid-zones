@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+import scipy.optimize as opt
+
 import time
 
 from hybzones import dispersal
@@ -27,35 +29,18 @@ if __name__ == "__main__":
 """
 TO-DO
 
-
-EARLY
-X-set up genotypearr
-
-X-get plots working
-
-X-subplots
-
-X-set up allelearr
-
-
 MATING
 
 -make the mating model more efficient and more comprehensible
 lol big task
 
--use masking instead of deletion to handle preventing dead individuals from 
+X-use masking instead of deletion to handle preventing dead individuals from 
 mating
 
 
 TABLES
 
-X-truncation of the pedigree!!!! how
-
-X-flag column isnt being used for much rn. add senescence back in
-
-X-does setting arrays as attributes copy them? no. just pointer
-
--save as .ped or .txt with .dat
+X-save as .ped or .txt with .dat
 
 X-get rid of unused ax subplot things in the figure
 
@@ -1015,7 +1000,7 @@ class Trial:
         self.run()
 
     def run(self):
-        print("simulation initiated @ " + self.get_time_string())
+        print("simulation initiated @ " + math_util.get_time_string())
         self.run_time_vec[self.params.g] = 0
         generation_table = GenerationTable.get_founding(self.params)
         if self.plot_int:
@@ -1312,7 +1297,91 @@ class GenotypeArr:
 
 
 class ClinePars:
-    pass
+
+    def __init__(self, x_vec, k_vec, params, bin_size):
+        if len(x_vec) != len(k_vec):
+            raise AttributeError("x and k vector lengths do not match")
+        self.x_vec = x_vec
+        self.k_vec = k_vec
+        self.params = params
+        self.bin_size = bin_size
+
+    @classmethod
+    def from_pedigree(cls, pedigree_table):
+        allele_arr = AlleleArr.from_pedigree(pedigree_table)
+        return cls.from_allele_arr(allele_arr)
+
+    @classmethod
+    def from_genotype_arr(cls, genotype_arr):
+        allele_arr = AlleleArr.from_subpop_arr(genotype_arr)
+        return cls.from_allele_arr(allele_arr)
+
+    @classmethod
+    def from_allele_arr(cls, allele_arr):
+        allele_freq = allele_arr.get_freq()
+        a2_freq = allele_freq[:, :, 0, 1]
+        x = plot_util.get_bin_mids(allele_arr.bin_size)
+        params = allele_arr.params
+        t_dim = params.g + 1
+        x_vec = np.zeros(t_dim)
+        k_vec = np.zeros(t_dim)
+        for t in np.arange(t_dim):
+            try:
+                cline_opt = cls.optimize_logistic(x, a2_freq[t])
+                k_vec[t] = cline_opt[0][0]
+                x_vec[t] = cline_opt[0][1]
+            except:
+                k_vec[t] = -1
+                x_vec[t] = -1
+        bin_size = allele_arr.bin_size
+        return cls(x_vec, k_vec, params, bin_size)
+
+    def __len__(self):
+        return len(self.x_vec)
+
+    @staticmethod
+    def logistic_fxn(x, k, x_0):
+        return 1 / (1.0 + np.exp(-k * (x - x_0)))
+
+    @classmethod
+    def optimize_logistic(cls, x, y):
+        return opt.curve_fit(cls.logistic_fxn, x, y)
+
+    def plot(self):
+        length = len(self)
+        t = np.arange(length)
+        fig, axs = plt.subplots(2, 1, figsize=(8, 7), sharex='all')
+        x_ax, k_ax = axs[0], axs[1]
+        k_ax.plot(t, self.k_vec, color="black", linewidth=2)
+        x_ax.plot(t, np.full(length, 0.5), color="red", linestyle="dashed")
+        x_ax.plot(t, self.x_vec, color="black", linewidth=2)
+        k_ax.set_ylim(0, 200)
+        x_ax.set_ylim(0, 1)
+        k_ax.set_xlim(0, length)
+        axs[1].set_xlabel("generations before present")
+        x_ax.set_ylabel("x_0")
+        k_ax.set_ylabel("k")
+        x_ax.set_title("cline parameter x_0")
+        k_ax.set_title("cline parameter k")
+        x_ax.invert_xaxis()
+        fig.suptitle("Cline Parameters")
+        fig.tight_layout(pad=1.0)
+        fig.show()
+
+    def plot_clines(self, n=10):
+        """Plot the cline approximation at n even intervals in time"""
+        snaps = np.linspace(len(self) - 1, 0, n, dtype=np.int32)
+        x = plot_util.get_bin_mids(self.bin_size)
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        colors = matplotlib.cm.YlGnBu(np.linspace(0.2, 1, n))
+        for i in np.arange(n):
+            t = snaps[i]
+            y = self.logistic_fxn(x, self.k_vec[t], self.x_vec[t])
+            sub.plot(x, y, color=colors[i], linewidth=2)
+        sub = plot_util.setup_space_plot(sub, 1.01, "$A^2$ cline", "Clines")
+        sub.legend(snaps)
+        fig.show()
 
 
 class AlleleArr:
