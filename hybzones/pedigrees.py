@@ -975,6 +975,39 @@ class PedigreeTable(Table):
         # currently returns nans for empty groups
         return arr
 
+    def plot_history(self, plot_int):
+        """
+
+        """
+        snaps = np.arange(self.g, -1, -plot_int)
+        n_figs = len(snaps)
+        if n_figs in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[n_figs]
+        else:
+            n_rows = 2
+            n_cols = (n_figs + 1) //2
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        for i in np.arange(n_figs):
+            t = snaps[i]
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            genotype_arr = GenotypeArr.from_generation(self.get_generation(t))
+            genotype_arr.get_subplot(ax)
+        if n_figs < plot_shape[0] * plot_shape[1]:
+            index = np.unravel_index(n_figs, plot_shape)
+            allele_arr = AlleleArr.from_generation(self.get_generation(0))
+            ax = axs[index]
+            allele_arr.get_subplot(ax)
+        figure.legend(["N", "Hyb"] + Constants.subpop_legend, fontsize=10,
+                      loc='right', borderaxespad=0,  fancybox=False,
+                      framealpha=1, edgecolor="black")
+        figure.show()
+        return figure
+
 
 class Trial:
 
@@ -983,7 +1016,7 @@ class Trial:
         self.run_time_vec = np.zeros(params.g + 1)
         self.report_int = max(min(100, params.g // 10), 1)
         self.plot_int = plot_int
-        self.figs = []
+        self.figure = None
         self.complete = False
         self.g = params.g
         self.t = params.g
@@ -1003,17 +1036,12 @@ class Trial:
         print("simulation initiated @ " + math_util.get_time_string())
         self.run_time_vec[self.params.g] = 0
         generation_table = GenerationTable.get_founding(self.params)
-        if self.plot_int:
-            self.initialize_figures()
-            self.enter_figure(generation_table)
-
         while self.t > 0:
             generation_table = self.cycle(generation_table)
         self.pedigree_table.append_generation(generation_table)
         self.pedigree_table.truncate()
-
         if self.plot_int:
-            self.set_figure_legend()
+            self.figure = self.pedigree_table.plot_history(self.plot_int)
             self.figure.show()
         print("simulation complete")
 
@@ -1030,9 +1058,6 @@ class Trial:
         generation_table.cols.sort_by_x()
         generation_table.cols.apply_id(i_0=self.pedigree_table.filled_rows)
         self.report()
-        if self.plot_int:
-            if self.t % self.plot_int == 0:
-                self.enter_figure(generation_table)
         return generation_table
 
     def update_t(self):
@@ -1051,56 +1076,11 @@ class Trial:
             print(f"g{self.t : > 6} complete, runtime = {run_t : >8}"
                   + f" s, averaging {mean_t : >8} s/gen, @ {time_string :>8}")
 
-    def initialize_figures(self):
-        """
-        Initialize a figure with subplots
-        :return:
-        """
-        n_figs = self.g - np.sum(np.arange(self.g) % self.plot_int != 0) + 1
-        shape_dict = {1: (1, 1), 2: (1, 2), 3: (1, 3), 4: (2, 2), 5: (2, 3),
-                      6: (2, 3), 8: (2, 4), 9: (3, 3), 10: (2, 5), 11: (3, 4),
-                      12: (3, 4), 16: (4, 4), 21: (3, 7)}
-        if n_figs in shape_dict:
-            n_rows, n_cols = shape_dict[n_figs]
-        else:
-            n_rows = 2
-            n_cols = (n_figs + 1) //2
-        self.plot_shape = (n_rows, n_cols)
-        size = (n_cols * 4, n_rows * 3)
-        self.figure, self.axs = plt.subplots(n_rows, n_cols, figsize=size,
-                                             sharex='all')
-        self.figure.tight_layout(pad=3.0)
-        self.figure.subplots_adjust(right=0.9)
-        self.subplot_i = 0
-
-    def enter_figure(self, generation_table):
-        """
-        Enter a subplot into its appropriate subplot slot
-
-        :return:
-        """
-        index = np.unravel_index(self.subplot_i, self.plot_shape)
-        ax = self.axs[index]
-        genotype_arr = GenotypeArr.from_generation(generation_table)
-        genotype_arr.get_subplot(ax)
-        self.subplot_i += 1
-
-    def set_figure_legend(self):
-        if self.subplot_i < self.plot_shape[0] * self.plot_shape[1]:
-            index = np.unravel_index(self.subplot_i, self.plot_shape)
-            allele_arr = AlleleArr.from_generation(
-                self.pedigree_table.get_generation(0))
-            ax = self.axs[index]
-            allele_arr.get_subplot(ax)
-        self.figure.legend(["N", "Hyb"] + Constants.subpop_legend, fontsize=10,
-                           loc='right', borderaxespad=0,  fancybox=False,
-                           framealpha=1, edgecolor="black")
-
 
 class GenotypeArr:
-    time_axis = 0
-    space_axis = 1
-    subpop_axis = 2
+    time_ax = 0
+    space_ax = 1
+    genotype_ax = 2
 
     def __init__(self, arr, params, t, bin_size):
         self.arr = arr
@@ -1195,7 +1175,10 @@ class GenotypeArr:
         Return the generation or generations at the times or mask designated
         by index
         """
-        return self.arr[index]
+        arr = self.arr[[index]]
+        params = self.params
+        bin_size = self.bin_size
+        return AlleleArr(arr, params, index, bin_size)
 
     def enter_generation(self, generation):
         t = generation.t
@@ -1274,7 +1257,7 @@ class GenotypeArr:
         fig.show()
         return fig
 
-    def plot_history(self, log=True):
+    def plot_size_history(self, log=True):
         n_vec = self.get_generation_sizes()
         fig = plt.figure(figsize=(8, 6))
         sub = fig.add_subplot(111)
@@ -1294,6 +1277,208 @@ class GenotypeArr:
         sub.set_ylabel("population size")
         sub.legend(["N"] + Constants.subpop_legend, fontsize=8)
         fig.show()
+
+    def plot_history(self, plot_int):
+        snaps = np.arange(self.g, -1, -plot_int)
+        n_figs = len(snaps)
+        if n_figs in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[n_figs]
+        else:
+            n_rows = 2
+            n_cols = (n_figs + 1) // 2
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        for i in np.arange(n_figs):
+            t = snaps[i]
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            self.get_subplot(ax, t=t)
+        if n_figs < plot_shape[0] * plot_shape[1]:
+            index = np.unravel_index(n_figs, plot_shape)
+            allele_arr = AlleleArr.from_subpop_arr(self[0])
+            ax = axs[index]
+            allele_arr.get_subplot(ax)
+        figure.legend(["N", "Hyb"] + Constants.subpop_legend, fontsize=10,
+                      loc='right', borderaxespad=0, fancybox=False,
+                      framealpha=1, edgecolor="black")
+        figure.show()
+        return figure
+
+
+class AlleleArr:
+
+    time_axis = 0
+    space_axis = 1
+    locus_axis = 2
+    allele_axis = 3
+
+    def __init__(self, arr, params, t, bin_size):
+        self.arr = arr
+        self.params = params
+        self.t = t
+        self.g = params.g
+        self.bin_size = bin_size
+
+    @classmethod
+    def from_generation(cls, generation_table, bin_size=0.01):
+        """
+        Get an AlleleArr of time dimension 1, recording the allele distribution
+        in a single Generation
+        """
+        bins, n_bins = plot_util.get_bins(0.01)
+        x = generation_table.cols.x
+        alleles = generation_table.cols.alleles
+        loci = np.array([[0, 1], [0, 1], [2, 3], [2, 3]])
+        arr = np.zeros((1, n_bins, 2, 2), dtype=np.int32)
+        for i in np.arange(4):
+            j, k = np.unravel_index(i, (2, 2))
+            a = i % 2 + 1
+            arr[0, :, j, k] = (
+                    np.histogram(x[alleles[:, loci[i, 0]] == a], bins)[0]
+                    + np.histogram(x[alleles[:, loci[i, 1]] == a], bins)[0])
+        params = generation_table.params
+        t = generation_table.t
+        return cls(arr, params, t, bin_size)
+
+    @classmethod
+    def from_pedigree(cls, pedigree_table, bin_size=0.01):
+        """
+        Derive an AlleleArr from an entire pedigree generation by generation
+
+        :param pedigree_table:
+        :param bin_size:
+        :return:
+        """
+        t_dim = pedigree_table.g + 1
+        n_bins = plot_util.get_n_bins(bin_size)
+        arr = np.zeros((t_dim, n_bins, 2, 2), dtype=np.int32)
+        for t in np.arange(t_dim):
+            generation = pedigree_table.get_generation(t)
+            arr[t, :, :, :] = AlleleArr.from_generation(generation).arr
+        params = pedigree_table.params
+        t = pedigree_table.t
+        return cls(arr, params, t, bin_size)
+
+    @classmethod
+    def from_subpop_arr(cls, subpop_arr):
+        """
+        Convert data from a SubpopArr into an AlleleArr
+        """
+        manifold = Constants.allele_manifold
+        arr = np.sum(subpop_arr.arr[:, :, :, None, None] * manifold, axis=2)
+        params = subpop_arr.params
+        t = subpop_arr.t
+        bin_size = subpop_arr.bin_size
+        return cls(arr, params, t, bin_size)
+
+    def __repr__(self):
+        return (f"AlleleArr of {len(self)} generations, t = {self.t}, "
+                f"g = {self.g}, holding {self.get_n_alleles()} alleles from "
+                f"{self.get_n_organisms()} organisms")
+
+    def __str__(self):
+        pass
+
+    def __len__(self):
+        """Return the number of generations represented in the array"""
+        return np.shape(self.arr)[0]
+
+    def __getitem__(self, index):
+        """
+        Return the generation or generations at the times or mask designated
+        by index
+        """
+        arr = self.arr[[index]]
+        params = self.params
+        bin_size = self.bin_size
+        return AlleleArr(arr, params, index, bin_size)
+
+    def get_n_alleles(self):
+        """Return the total number of alleles held in the array"""
+        return np.sum(self.arr)
+
+    def get_n_organisms(self):
+        """Return the total number of organisms represented in the array"""
+        return np.sum(self.arr) // 4
+
+    def get_n_at_t(self, t):
+        """Return the population size of generation t"""
+        return np.sum(self.arr[t]) // 4
+
+    def get_bin_n(self):
+        """Return a vector holding the number of loci represented in each
+        spatial bin
+        """
+        return np.sum(self.arr, axis=3)
+
+    def get_bin_n_at_t(self, t):
+        """Return a vector holding the number of loci represented in each
+        spatial bin at time t
+        """
+        return np.sum(self.arr[t, :, :, :], axis=2)
+
+    def get_freq(self):
+        """Return an array of allele frequencies"""
+        n_loci = self.get_bin_n()
+        return self.arr / n_loci[:, :, :, np.newaxis]
+
+    def get_freq_at_t(self, t):
+        """Return an array of allele frequencies at time t"""
+        n_loci = self.get_bin_n()
+        return self.arr[t] / n_loci[t, :, :, np.newaxis]
+
+    def get_subplot(self, sub, t=0):
+        freqs = self.get_freq_at_t(t)
+        bin_mids = plot_util.get_bin_mids(self.bin_size)
+        for i in np.arange(3, -1, -1):
+            j, k = np.unravel_index(i, (2, 2))
+            sub.plot(bin_mids, freqs[:, j, k],
+                     color=Constants.allele_colors[i], linewidth=2,
+                     label=Constants.allele_legend[i], marker="x")
+        title = "t = " + str(self.t) + " n = " + str(self.get_n_at_t(t))
+        sub = plot_util.setup_space_plot(sub, 1.01, "allele freq", title)
+
+    def plot_freq(self, t=0):
+        """
+        Make a plot of the densities of each subpopulation across space
+        at index (time) t
+        """
+        fig = plt.figure(figsize=Constants.plot_size)
+        sub = fig.add_subplot(111)
+        self.get_subplot(sub, t)
+        plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
+        fig.show()
+        return fig
+
+    def plot_history(self, plot_int):
+        snaps = np.arange(self.g, -1, -plot_int)
+        n_figs = len(snaps)
+        if n_figs in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[n_figs]
+        else:
+            n_rows = 2
+            n_cols = (n_figs + 1) // 2
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        for i in np.arange(n_figs):
+            t = snaps[i]
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            self.get_subplot(ax, t=t)
+        if n_figs < plot_shape[0] * plot_shape[1]:
+            index = np.unravel_index(n_figs, plot_shape)
+            figure.delaxes(axs[index])
+        figure.legend(Constants.allele_legend, fontsize=10, loc='right',
+                      borderaxespad=0, fancybox=False, framealpha=1,
+                      edgecolor="black")
+        figure.show()
+        return figure
 
 
 class ClinePars:
@@ -1382,142 +1567,6 @@ class ClinePars:
         sub = plot_util.setup_space_plot(sub, 1.01, "$A^2$ cline", "Clines")
         sub.legend(snaps)
         fig.show()
-
-
-class AlleleArr:
-
-    time_axis = 0
-    space_axis = 1
-    locus_axis = 2
-    allele_axis = 3
-
-    def __init__(self, arr, params, t, bin_size):
-        self.arr = arr
-        self.params = params
-        self.t = t
-        self.g = params.g
-        self.bin_size = bin_size
-
-    @classmethod
-    def from_generation(cls, generation_table, bin_size=0.01):
-        """
-        Get an AlleleArr of time dimension 1, recording the allele distribution
-        in a single Generation
-        """
-        bins, n_bins = plot_util.get_bins(0.01)
-        x = generation_table.cols.x
-        alleles = generation_table.cols.alleles
-        loci = np.array([[0, 1], [0, 1], [2, 3], [2, 3]])
-        arr = np.zeros((1, n_bins, 2, 2), dtype=np.int32)
-        for i in np.arange(4):
-            j, k = np.unravel_index(i, (2, 2))
-            a = i % 2 + 1
-            arr[0, :, j, k] = (
-                    np.histogram(x[alleles[:, loci[i, 0]] == a], bins)[0]
-                    + np.histogram(x[alleles[:, loci[i, 1]] == a], bins)[0])
-        params = generation_table.params
-        t = generation_table.t
-        return cls(arr, params, t, bin_size)
-
-    @classmethod
-    def from_pedigree(cls, pedigree_table, bin_size=0.01):
-        """
-        Derive an AlleleArr from an entire pedigree generation by generation
-
-        :param pedigree_table:
-        :param bin_size:
-        :return:
-        """
-        t_dim = pedigree_table.g + 1
-        n_bins = plot_util.get_n_bins(bin_size)
-        arr = np.zeros((t_dim, n_bins, 2, 2), dtype=np.int32)
-        for t in np.arange(t_dim):
-            generation = pedigree_table.get_generation(t)
-            arr[t, :, :, :] = AlleleArr.from_generation(generation).arr
-        params = pedigree_table.params
-        t = pedigree_table.t
-        return cls(arr, params, t, bin_size)
-
-    @classmethod
-    def from_subpop_arr(cls, subpop_arr):
-        """
-        Convert data from a SubpopArr into an AlleleArr
-        """
-        manifold = Constants.allele_manifold
-        arr = np.sum(subpop_arr.arr[:, :, :, None, None] * manifold, axis=2)
-        params = subpop_arr.params
-        t = subpop_arr.t
-        bin_size = subpop_arr.bin_size
-        return cls(arr, params, t, bin_size)
-
-    def __repr__(self):
-        return (f"AlleleArr of {len(self)} generations, t = {self.t}, "
-                f"g = {self.g}, holding {self.get_n_alleles()} alleles from "
-                f"{self.get_n_organisms()} organisms")
-
-    def __str__(self):
-        pass
-
-    def __len__(self):
-        """Return the number of generations represented in the array"""
-        return np.shape(self.arr)[0]
-
-    def get_n_alleles(self):
-        """Return the total number of alleles held in the array"""
-        return np.sum(self.arr)
-
-    def get_n_organisms(self):
-        """Return the total number of organisms represented in the array"""
-        return np.sum(self.arr) // 4
-
-    def get_n_at_t(self, t):
-        """Return the population size of generation t"""
-        return np.sum(self.arr[t]) // 4
-
-    def get_bin_n(self):
-        """Return a vector holding the number of loci represented in each
-        spatial bin
-        """
-        return np.sum(self.arr, axis=3)
-
-    def get_bin_n_at_t(self, t):
-        """Return a vector holding the number of loci represented in each
-        spatial bin at time t
-        """
-        return np.sum(self.arr[t, :, :, :], axis=2)
-
-    def get_freq(self):
-        """Return an array of allele frequencies"""
-        n_loci = self.get_bin_n()
-        return self.arr / n_loci[:, :, :, np.newaxis]
-
-    def get_freq_at_t(self, t):
-        """Return an array of allele frequencies at time t"""
-        n_loci = self.get_bin_n()
-        return self.arr[t] / n_loci[t, :, :, np.newaxis]
-
-    def get_subplot(self, sub, t=0):
-        freqs = self.get_freq_at_t(t)
-        bin_mids = plot_util.get_bin_mids(self.bin_size)
-        for i in np.arange(3, -1, -1):
-            j, k = np.unravel_index(i, (2, 2))
-            sub.plot(bin_mids, freqs[:, j, k],
-                     color=Constants.allele_colors[i], linewidth=2,
-                     label=Constants.allele_legend[i], marker="x")
-        title = "t = " + str(self.t) + " n = " + str(self.get_n_at_t(t))
-        sub = plot_util.setup_space_plot(sub, 1.01, "allele freq", title)
-
-    def plot_freq(self, t=0):
-        """
-        Make a plot of the densities of each subpopulation across space
-        at index (time) t
-        """
-        fig = plt.figure(figsize=Constants.plot_size)
-        sub = fig.add_subplot(111)
-        self.get_subplot(sub, t)
-        plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
-        fig.show()
-        return fig
 
 
 class Constants:
@@ -1613,6 +1662,21 @@ class Constants:
                                 [[0, 2], [1, 1]],
                                 [[0, 2], [0, 2]]], dtype=np.uint8)
 
+    # subplot dimensions for history plots
+    shape_dict = {1: (1, 1),
+                  2: (1, 2),
+                  3: (1, 3),
+                  4: (2, 2),
+                  5: (2, 3),
+                  6: (2, 3),
+                  8: (2, 4),
+                  9: (3, 3),
+                  10: (2, 5),
+                  11: (3, 4),
+                  12: (3, 4),
+                  16: (4, 4),
+                  21: (3, 7)}
+
 
 # debug
 if __name__ == "__main__":
@@ -1620,3 +1684,5 @@ if __name__ == "__main__":
     trial = Trial(params, plot_int=1)
     cols = trial.pedigree_table.cols
     gen = trial.pedigree_table.get_generation(0)
+    genotype_arr = GenotypeArr.from_pedigree(trial.pedigree_table)
+    allele_arr = AlleleArr.from_pedigree(trial.pedigree_table)
