@@ -1,12 +1,23 @@
+import matplotlib
+
+import matplotlib.pyplot as plt
+
+import msprime
+
 import numpy as np
 
 import networkx as nx
 
-import msprime
-
 import os
 
-from hybzones.pedigrees import *
+from hybzones import math_util
+
+from hybzones import parameters
+
+from hybzones import pedigrees
+
+from hybzones.pedigrees import Constants
+
 # not good
 
 
@@ -68,7 +79,7 @@ def draw_ts(ts, node_type="ind"):
         svg.write(tree)
 
 
-class SamplePedigreeTable(PedigreeTable):
+class SamplePedigreeTable(pedigrees.PedigreeTable):
 
     size_factor = 0.64
 
@@ -77,7 +88,7 @@ class SamplePedigreeTable(PedigreeTable):
         col_names = pedigree_table.cols.col_names
         self.time_index = self.get_time_index(params)
         max_rows = self.compute_max_rows(params)
-        cols = Columns.initialize(max_rows, col_names)
+        cols = pedigrees.Columns.initialize(max_rows, col_names)
         cols.filled_rows = max_rows  # filled means unfilled lol
         t = self.time_index[0]
         g = params.g
@@ -478,7 +489,7 @@ class MultiWindow:
         pi = dict["pi"]
         pi_xy = dict["pi_xy"]
         genotype_pi = dict["genotype_pi"]
-        params = Params.from_arr(dict["param_arr"])
+        params = parameters.Params.from_arr(dict["param_arr"])
         return cls(pi, pi_xy, genotype_pi, params)
 
     def run(self, tc):
@@ -487,8 +498,8 @@ class MultiWindow:
             self.pi[i, :] = pi
             self.pi_xy[i, :, :] = pi_xy
             self.genotype_pi[i, :, :] = genotype_pi
-            print(f"window {i} complete @ " + Trial.get_time_string())
-        print("Multi-window sampling complete @ " + Trial.get_time_string())
+            print(f"window {i} complete @ " + math_util.get_time_string())
+        print("Multi-window sampling complete @ "+ math_util.get_time_string())
 
     def get_sample_sets(self, sample_pedigree_table):
         """
@@ -793,7 +804,7 @@ class MultiWindows:
     ### plot ancestry AND heterozygosity: needs full pedigree #####################
 
     def triangle_plot(pedigree, pi_matrix, pi_factor=1e5):
-
+        """
         x = dip.get_lastgen(pedigree)[:, PedStruc.Col.x]
         ancestries = dip.compute_ancestries(pedigree, plot=False)
         n_bins = np.shape(pi_matrix)[1]
@@ -861,14 +872,16 @@ class MultiWindows:
         cax.set_xlabel("ancestry")
         cax.set_ylabel("diversity")
         cax.set_title("2D cmap legend", fontsize=10)
+        """
+        pass
 
 
 # debug. tests important funcionalities and creates example objects
 if __name__ == "__main__":
-    params = Params(10_000, 10, 0.1)
+    params = parameters.Params(10_000, 10, 0.1)
     params.sample_sizes = np.full(10, 2)
     params.n_windows = 2
-    trial = Trial(params)
+    trial = pedigrees.Trial(params)
     sample_pedigree = SamplePedigreeTable.from_trial(trial)
     tc = sample_pedigree.get_tc()
     ts0 = explicit_coalescent(tc, params)

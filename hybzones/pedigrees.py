@@ -6,15 +6,17 @@ import numpy as np
 
 import time
 
-from hybzones.parameters import Params
-
-from hybzones import plot_util
-
-from hybzones import mating
-
 from hybzones import dispersal
 
 from hybzones import fitness
+
+from hybzones import mating
+
+from hybzones import math_util
+
+from hybzones.parameters import Params
+
+from hybzones import plot_util
 
 
 if __name__ == "__main__":
@@ -1060,7 +1062,7 @@ class Trial:
             t_last = self.run_time_vec[self.t + self.report_int]
             mean_t = str(np.round((t - t_last) / self.report_int, 3))
             run_t = str(np.round(self.run_time_vec[self.t], 2))
-            time_string = self.get_time_string()
+            time_string = math_util.get_time_string()
             print(f"g{self.t : > 6} complete, runtime = {run_t : >8}"
                   + f" s, averaging {mean_t : >8} s/gen, @ {time_string :>8}")
 
@@ -1108,10 +1110,6 @@ class Trial:
         self.figure.legend(["N", "Hyb"] + Constants.subpop_legend, fontsize=10,
                            loc='right', borderaxespad=0,  fancybox=False,
                            framealpha=1, edgecolor="black")
-
-    @staticmethod
-    def get_time_string():
-        return str(time.strftime("%H:%M:%S", time.localtime()))
 
 
 class GenotypeArr:

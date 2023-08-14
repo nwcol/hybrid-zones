@@ -27,12 +27,7 @@ def optimize_logistic(data, x):
     return popt, pcov
 
 
-def divides(a, b):
-    """Return a bool True if a divides b, else return False"""
-    if b % a == 0:
-        div = True
-    else:
-        div = False
-    return div
+def get_time_string():
+    return str(time.strftime("%H:%M:%S", time.localtime()))
 
 
