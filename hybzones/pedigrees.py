@@ -980,6 +980,45 @@ class PedigreeTable(Table):
             new_max = self.filled_rows
         self.cols.truncate(new_max)
 
+    def get_ancestries(self, t=0):
+        """
+        Compute the genealogical ancestry values of the individuals living
+        at generation t
+        """
+        n = len(self)
+        parents = self.cols.parents
+        founder_index = self.cols.get_subpop_index(time=self.g)
+        anc = np.zeros((n, 3), dtype=np.float32)
+        anc[founder_index, :2] = parents[founder_index]
+        anc[founder_index, 2] = self.cols.alleles[founder_index, 0] - 1
+        gen_index = None
+        for i in np.arange(self.g - 1, t - 1, -1):
+            gen_index = self.cols.get_subpop_index(time=i)
+            gen_parents = parents[gen_index]
+            anc[gen_index, :2] = gen_parents
+            anc[gen_index, 2] = np.mean([anc[gen_parents[:, 0], 2],
+                                         anc[gen_parents[:, 1], 2]], axis=0)
+        ancestries = anc[gen_index, 2]
+        return ancestries
+
+    def get_genotype_ancestries(self, t=0, n_bins=10):
+        """
+        Compute the mean genealogical ancestry value for spatial and genotype
+        bins
+        """
+        generation = self.get_generation(t)
+        ancestries = self.get_ancestries(t)
+        ranges = plot_util.get_ranges(n_bins)
+        arr = np.zeros((n_bins, Constants.n_genotypes))
+        for geno in np.arange(Constants.n_genotypes):
+            for i in np.arange(n_bins):
+                xbin = ranges[i]
+                index = generation.cols.get_subpop_index(x=xbin, genotype=geno)
+                arr[i, geno] = np.mean(ancestries[index])
+
+        # currently returns nans for empty groups
+        return arr
+
 
 class Trial:
 

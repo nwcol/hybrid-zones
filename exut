@@ -1,0 +1,265 @@
+[33mcommit 34e9d82f5e9851af1ecf3167f936e2ca8651c478[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: nwcol <nwcollier@wisc.edu>
+Date:   Mon Aug 14 13:46:47 2023 -0500
+
+    implement ClinePars class in pedigrees.py
+
+[33mcommit b55be4448875222d777d154ae7f08894d590f8d9[m
+Author: nwcol <nwcollier@wisc.edu>
+Date:   Mon Aug 14 09:54:06 2023 -0500
+
+    add readme.rst
+
+[33mcommit d10b615186ee0406114c93e095c53e645bdab816[m
+Author: nwcol <nwcollier@wisc.edu>
+Date:   Mon Aug 14 09:43:03 2023 -0500
+
+    change imports and add setup.py; add some content to requirements.txt
+
+[33mcommit 57b4627e2f0ddc555305b2b2426d701a4a74d039[m
+Author: nwcol <nwcollier@wisc.edu>
+Date:   Mon Aug 14 09:12:33 2023 -0500
+
+    add setup.cfg file
+
+[33mcommit 19c714be30285aae568c70a310cdaa6f240b838c[m
+Author: nwcol <nwcollier@wisc.edu>
+Date:   Fri Aug 11 13:06:53 2023 -0500
+
+    add docs, data, examples folders to repo
+
+[33mcommit b16734b8bec2e9aa7d6aa07702d250a3cba574b4[m
+Author: nwcol <nwcollier@wisc.edu>
+Date:   Fri Aug 11 13:02:15 2023 -0500
+
+    setup local github repo and import local changes
+
+[33mcommit b9becc061ec1be9621dcc00cde68a0eaec0d7165[m[33m ([m[1;31morigin/old_untracked[m[33m)[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Fri Aug 11 12:22:44 2023 -0500
+
+    Delete scripts.py
+
+[33mcommit 6910a863e337d0f570d4df43ea351f98f3ccc081[m
+Author: Nick Collier <niwicollier@gmail.com>
+Date:   Wed Aug 9 13:53:39 2023 -0500
+
+    Added scripts, work on hybzones
+
+[33mcommit ffb747d983e89d1ab3aaabdfa9cb392bd5ab23a4[m
+Author: Nick Collier <niwicollier@gmail.com>
+Date:   Tue Aug 8 15:07:00 2023 -0500
+
+    new directories
+
+[33mcommit 83b74c53a57701a8229d3c394b0234e975fe3d44[m
+Author: Nick Collier <niwicollier@gmail.com>
+Date:   Tue Aug 8 14:59:35 2023 -0500
+
+    rename hybzone to hybzones
+
+[33mcommit 6b2d7566e0a4a0ed2cd92fefa5677d97ea3158ee[m
+Author: Nick Collier <niwicollier@gmail.com>
+Date:   Tue Aug 8 14:58:31 2023 -0500
+
+    total reorganization
+
+[33mcommit 758672c3a205b234f910017260d1831c42d3888e[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Sun Aug 6 15:24:26 2023 -0500
+
+    Add files via upload
+
+[33mcommit 61d6c98dacd2478a355dc6daa9b44d7f46e6b63b[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Sun Aug 6 13:19:42 2023 -0500
+
+    Add files via upload
+
+[33mcommit 7f750660a5be10bb21023deadd0bbf71966679ba[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Fri Aug 4 14:57:27 2023 -0500
+
+    Add files via upload
+
+[33mcommit ec5a2d91a5289d1c6f4476f65998ead62e56fed2[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Fri Aug 4 11:17:45 2023 -0500
+
+    Add files via upload
+
+[33mcommit 76c6dfdb5885986145c4175a6dacf41dd729f835[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Thu Aug 3 15:16:11 2023 -0500
+
+    Add files via upload
+
+[33mcommit 5d9437e032211c415952b755916645610fa1133f[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Thu Aug 3 15:00:16 2023 -0500
+
+    Update README.md
+
+[33mcommit 4c7c84f9e20751deb20a43c051abfdb6aa2866e4[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Thu Aug 3 14:59:46 2023 -0500
+
+    Add files via upload
+
+[33mcommit 2b5554bae03c543405adaa3d9fc274f5efe55ee3[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 31 13:51:49 2023 -0500
+
+    Update tabletests.py
+
+[33mcommit 344efba81fe5b08b70d3060df30ad00e5dcbe810[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 31 13:51:07 2023 -0500
+
+    Update tabletests.py
+
+[33mcommit 787c3c2d551808a02a1896f23616a831b1b4d645[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 31 12:32:04 2023 -0500
+
+    Add files via upload
+
+[33mcommit 88fd95052bcb4ad87a4b407996de343885b13c8d[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 31 12:15:05 2023 -0500
+
+    Add files via upload
+
+[33mcommit 13a26fd619296352fda56c937c046a68ede4f266[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Fri Jul 28 07:53:03 2023 -0500
+
+    Add files via upload
+
+[33mcommit 9f8f8cbb43034a8b0220f1df10be3bed222c357f[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Thu Jul 27 12:03:20 2023 -0500
+
+    Add files via upload
+
+[33mcommit 4f79e5fe4bae8e747f998292581bd61870409d66[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Thu Jul 27 09:06:05 2023 -0500
+
+    Delete hi
+
+[33mcommit a39b1776a13ee2114e46549f4a18f4391a65125b[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Thu Jul 27 09:05:35 2023 -0500
+
+    Update and rename diploid_scripts/scripts.py to scripts.py
+
+[33mcommit 443ac06c8494efd258daee53a6311baadf1dbde1[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Thu Jul 27 09:02:46 2023 -0500
+
+    Add files via upload
+
+[33mcommit 3b0875bb66d903f1343c78418841e0960fb50443[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Wed Jul 26 09:31:50 2023 -0500
+
+    Delete hithere.txt
+
+[33mcommit f715bb151ce0f85c9be397f68bbe67b5fb642280[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Wed Jul 26 09:31:35 2023 -0500
+
+    Delete diploid_pop_model.py
+
+[33mcommit e5f6e237383b94b85b7a5a13025876089ed51edb[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Tue Jul 25 16:05:33 2023 -0500
+
+    Add files via upload
+
+[33mcommit 198857ef398552135e383b28ef17bc09cdb12930[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Tue Jul 25 13:58:19 2023 -0500
+
+    Add files via upload
+
+[33mcommit 04f8cda779a5c585e9977842d31bd730d6549bfa[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Tue Jul 25 12:06:51 2023 -0500
+
+    Add files via upload
+
+[33mcommit 92b8d7fb5ae02d9c6009988ba4ca7099a500b30e[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Tue Jul 25 08:37:00 2023 -0500
+
+    Add files via upload
+
+[33mcommit f9c39aa4f8a2afae6cfdca2d1bafdd5cf800e5d4[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 24 16:38:12 2023 -0500
+
+    Update README.md
+
+[33mcommit a1afa270b648ac6cbea91723ae2ecc0d06d2958d[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 24 16:37:12 2023 -0500
+
+    Add files via upload
+
+[33mcommit 46114c7e80e3c21d355885345f6c6771f9c0c2bf[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 24 16:36:59 2023 -0500
+
+    Add files via upload
+
+[33mcommit 69de985cccedf8ebd07944ebc5196cc0654b5de6[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 24 07:25:24 2023 -0500
+
+    Update README.md
+
+[33mcommit d4b54e9e3bad268e184842d751ca076e0b53d5bb[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 24 07:25:18 2023 -0500
+
+    Update README.md
+
+[33mcommit 26e72cb570795524819c9d73c15e5453d3154273[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 24 07:25:02 2023 -0500
+
+    Create README.md
+
+[33mcommit 047eddd3c3b189a13e2ff1bde0f122d3644988c8[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Mon Jul 24 06:35:41 2023 -0500
+
+    Create hi
+
+[33mcommit c4511acb1522e8678b1ac8043851b61cbe80c525[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Sun Jul 23 16:26:53 2023 -0500
+
+    Add files via upload
+
+[33mcommit b327b59359f200f27f7dd9658a20f63d16be89e9[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Sun Jul 23 15:58:17 2023 -0500
+
+    Add files via upload
+
+[33mcommit 1071d6b2bd213e20f7042a872f3930400893ca1b[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Sun Jul 23 10:00:29 2023 -0500
+
+    Add files via upload
+
+[33mcommit 0de9a421078d6baec9acbf1275b34b833c17a2c3[m
+Author: Nick Collier <98357630+nwcol@users.noreply.github.com>
+Date:   Fri Jul 21 14:23:06 2023 -0500
+
+    Add files via upload
+
+[33mcommit f5ba6b301
