@@ -16,7 +16,7 @@ from hybzones import mating
 
 from hybzones import math_util
 
-from hybzones.parameters import Params
+from hybzones import parameters
 
 from hybzones import plot_util
 
@@ -27,98 +27,54 @@ if __name__ == "__main__":
 
 
 """
-TO-DO
+GENERAL TO-DO
 
-MATING
+- tests directory setup
 
--make the mating model more efficient and more comprehensible
+- make the mating model more efficient and more comprehensible
 lol big task
 
-X-use masking instead of deletion to handle preventing dead individuals from 
-mating
+- .ped file format
 
+- better plot generation; more specialized fxns in the pedigree object 
 
-TABLES
+- plot generation in the genotypearr
 
-X-save as .ped or .txt with .dat
+- emergency table extension 
 
-X-get rid of unused ax subplot things in the figure
-
--emergency table extension 
-
--parse out getting/setting attributes (columns) and make sure it works right
+- parse out getting/setting attributes (columns) and make sure it works right
 already implemented but worth checking.
 
--__repr__, __str__ for pedigree and generation tables
+- better __repr__, __str__ for pedigree and generation tables
 
-X-change sample zones back to a list of lists for easier use
+- when to sort by x and id for max consistency and least use
 
--when to sort by x and id for max consistency and least use
-
--sort out how to handle properties between columns vs tables (direct access
+- sort out how to handle properties between columns vs tables (direct access
 or access through table property?)
 
--beef up columns class
+- columns initialization; polish up a bit
 
--beef up tables class
+- improve names of genotypearr, allelearr functions, theyre pretty bad
 
--replace A_alleles etc with signal_alleles (lower case, descriptive)
+- handling zero length columns
 
--better means of creating a pedigree with specific columns in it
+- print dtypes below columns when __str__
 
--improve names of genotypearr functions, theyre pretty bad
-
--also do this for allelearr
-
--zero length array printing?
-
--print dtypes below columns when __str__
-
-
-GENETICS
-
--handling parents when the upper cutoff is less than params.g in pedigree
+- handling parents when the upper cutoff is less than params.g in pedigree
 sampling
 
--complex sample defines and simpler sample set objects
+- complex sample defines and simpler sample set objects
 
--just an overall easier way to define sample sets and keep track of them?
+- keeping track of metadata outside of tskit/msprime
 
--also to keep track of 'metadata' eg genotype, sex, xloc
+- finish up multiwindows class
 
--pedigree sampling
-
--reconstruct the code error you found to see what it does
-
--just set up multiwindows in a smarter and better way. improvements have 
-already made things a lot clearer
-
--multiwindows plotting
-
-
-GENERAL
-X-restructure the module and rename stuff. decide on final names
-
-X-write scripts to run basic multi-window stuff
-
--get those scripts running! get results
-
--rebuild all the old stuff (all!). this before optimizing mating fxns 
-
-X-renovate parameters
-
-X-implement cline pars
-
--get everything set up to be able to make many slices over the same 
+- get everything set up to be able to make many slices over the same 
 pedigree and run coalescence on each
 
--full matings functionality
+- plotting death frequency in space
 
--matings error-- reproduce?
-
-X-getting ancestries
-
--plotting death frequency in space
+- handling extinction and ungraceful exits for simulation
 
 """
 
@@ -1028,15 +984,20 @@ class Trial:
         self.report_int = max(min(100, params.g // 10), 1)
         self.plot_int = plot_int
         self.figs = []
-
         self.complete = False
         self.g = params.g
         self.t = params.g
-
         self.params = params
         self.pedigree_table = PedigreeTable.initialize_from_params(params,
             col_names=["sex", "x", "alleles", "flag"])
         self.run()
+
+    @classmethod
+    def new(cls, K, g, plot_int=None, **kwargs):
+        params = parameters.Params(K, g, 0.1)
+        for arg in kwargs:
+            setattr(params, arg, kwargs[arg])
+        return cls(params, plot_int)
 
     def run(self):
         print("simulation initiated @ " + math_util.get_time_string())
@@ -1190,7 +1151,7 @@ class GenotypeArr:
     def load_txt(cls, filename):
         file = open(filename, 'r')
         string = file.readline()
-        params = Params.from_string(string)
+        params = parameters.Params.from_string(string)
         raw_arr = np.loadtxt(file, dtype=np.int32)
         file.close()
         shape = np.shape(raw_arr)
@@ -1655,7 +1616,7 @@ class Constants:
 
 # debug
 if __name__ == "__main__":
-    params = Params(10_000, 10, 0.1)
+    params = parameters.Params(10_000, 10, 0.1)
     trial = Trial(params, plot_int=1)
     cols = trial.pedigree_table.cols
     gen = trial.pedigree_table.get_generation(0)

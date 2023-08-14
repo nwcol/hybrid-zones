@@ -136,7 +136,7 @@ class Matings:
         living_table = parent_table[living_mask]
         self.id_map = IDmap(living_table)
         self.n_offspring = self.compute_n_offspring(living_table)
-        self.n = np.sum(self.n_offspring)
+        self.n_ = np.sum(self.n_offspring)
         self.mating_bounds = Bounds(living_table, 0, 1, limits=[
             -self.params.bound, self.params.bound])
         rel_mat_ids, rel_pat_ids = self.run(living_table)
@@ -203,8 +203,8 @@ class Matings:
         male_x = generation_table.x[self.id_map.male_index]
         pref_matrix = self.compute_pref_matrix(generation_table)
         pref_index = self.compute_pref_index(generation_table)
-        maternal_ids = np.full(self.n, -1, dtype=np.int32)
-        paternal_ids = np.full(self.n, -1, dtype=np.int32)
+        maternal_ids = np.full(self.n_, -1, dtype=np.int32)
+        paternal_ids = np.full(self.n_, -1, dtype=np.int32)
         i = 0
         for f_id in np.arange(len(female_x)):
             n_children = self.n_offspring[f_id]
@@ -221,6 +221,7 @@ class Matings:
                 pass
         maternal_ids = maternal_ids[paternal_ids > -1]
         paternal_ids = paternal_ids[paternal_ids > -1]
+        self.n = len(maternal_ids)
         return maternal_ids, paternal_ids
 
     def gaussian(self, x, male_x, prefs, bound):
