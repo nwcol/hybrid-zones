@@ -97,7 +97,7 @@ already made things a lot clearer
 
 
 GENERAL
--restructure the module and rename stuff. decide on final names
+X-restructure the module and rename stuff. decide on final names
 
 X-write scripts to run basic multi-window stuff
 
@@ -107,7 +107,7 @@ X-write scripts to run basic multi-window stuff
 
 X-renovate parameters
 
--implement cline pars
+X-implement cline pars
 
 -get everything set up to be able to make many slices over the same 
 pedigree and run coalescence on each
@@ -116,7 +116,7 @@ pedigree and run coalescence on each
 
 -matings error-- reproduce?
 
--getting ancestries
+X-getting ancestries
 
 -plotting death frequency in space
 
