@@ -29,16 +29,16 @@ if __name__ == "__main__":
 """
 GENERAL TO-DO
 
+- restructure
+
+- directories fix
+
 - tests directory setup
 
 - make the mating model more efficient and more comprehensible
 lol big task
 
 - .ped file format
-
-- better plot generation; more specialized fxns in the pedigree object 
-
-- plot generation in the genotypearr
 
 - emergency table extension 
 
@@ -155,7 +155,7 @@ class Columns:
             raise AttributeError("max_rows mismatched to column length")
 
     @classmethod
-    def initialize(cls, max_rows, col_names):
+    def empty(cls, max_rows, col_names):
         """
         Used by constructors. Initialize an empty Columns instance of length
         max_rows
@@ -878,7 +878,7 @@ class PedigreeTable(Table):
         :return:
         """
         max_rows = int(params.K * (params.g + 1) * cls.size_factor)
-        cols = Columns.initialize(max_rows, col_names)
+        cols = Columns.empty(max_rows, col_names)
         g = params.g
         t = params.g
         return cls(cols, params, g, t)
@@ -985,7 +985,7 @@ class PedigreeTable(Table):
             n_rows, n_cols = Constants.shape_dict[n_figs]
         else:
             n_rows = 2
-            n_cols = (n_figs + 1) //2
+            n_cols = (n_figs + 1) // 2
         plot_shape = (n_rows, n_cols)
         size = (n_cols * 4, n_rows * 3)
         figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
@@ -1150,7 +1150,7 @@ class GenotypeArr:
         :return:
         """
         return (f"GenotypeArr of {len(self)} generations, t = {self.t}, "
-                f"g = {self.g}, n organisms = {self.get_size()}")
+                f"g = {self.g}, n organisms = {self.size}")
 
     def __str__(self):
         """
@@ -1184,6 +1184,27 @@ class GenotypeArr:
         t = generation.t
         self.arr[t, :, :] = GenotypeArr.from_generation(generation).arr[0]
 
+    @property
+    def size(self):
+        """
+        Return the total number of organisms recorded in the array
+        """
+        return np.sum(self.arr)
+
+    @property
+    def generation_sizes(self):
+        """
+        Return a vector of population sizes for each recorded generation
+        """
+        return np.sum(np.sum(self.arr, axis=1), axis=1)
+
+    @property
+    def densities(self):
+        """
+        Return the total population densities in each generation
+        """
+        return np.sum(self.arr, axis=2)
+
     def save_txt(self, filename):
         """
         Reshape the array to be 2d with shape (generations, n_bins * n_geno.)
@@ -1198,36 +1219,34 @@ class GenotypeArr:
         file.close()
         print("SubpopArr saved at " + filename)
 
-    def get_size(self):
-        """Return the total number of organisms recorded in the array"""
-        return np.sum(self.arr)
-
-    def get_generation_sizes(self):
-        """Return a vector of the whole populations of each generation"""
-        return np.sum(np.sum(self.arr, axis=1), axis=1)
-
     def get_generation_size(self, t):
-        """Return the whole-population size at generation t"""
+        """
+        Return the population size at generation t
+        """
         return np.sum(self.arr[t])
 
     def get_hybrid_densities(self, t):
-        """Compute the sum of densities of the subpopulations with one or more
+        """
+        Compute the sum of densities of the subpopulations with one or more
         heterozygous loci at generation t
         """
         return np.sum(self.arr[t, :, 1:8], axis=1)
 
-    def get_bin_densities(self, t):
-        """Return a vector of whole population bin densities in generation t"""
+    def get_densities(self, t):
+        """
+        Return a vector of whole population bin densities in generation t
+        """
         return np.sum(self.arr[t], axis=1)
 
     def get_subplot(self, sub, t=0):
         """
+        Plot genotype densities for a single generation on a subplot
 
         :param t:
         :return:
         """
         b = plot_util.get_bin_mids(self.bin_size)
-        n_vec = self.get_bin_densities(t)
+        n_vec = self.get_densities(t)
         sub.plot(b, n_vec, color="black", linestyle='dashed', linewidth=2,
                  marker="x")
         sub.plot(b, self.get_hybrid_densities(t), color='green',
@@ -1258,7 +1277,10 @@ class GenotypeArr:
         return fig
 
     def plot_size_history(self, log=True):
-        n_vec = self.get_generation_sizes()
+        """
+        Make a plot of per-genotype population sizes over time
+        """
+        n_vec = self.generation_sizes
         fig = plt.figure(figsize=(8, 6))
         sub = fig.add_subplot(111)
         times = np.arange(self.g + 1)
@@ -1279,6 +1301,10 @@ class GenotypeArr:
         fig.show()
 
     def plot_history(self, plot_int):
+        """
+        Plot several generations on a single figure to provide snapshots of
+        simulation history
+        """
         snaps = np.arange(self.g, -1, -plot_int)
         n_figs = len(snaps)
         if n_figs in Constants.shape_dict:
@@ -1376,8 +1402,8 @@ class AlleleArr:
 
     def __repr__(self):
         return (f"AlleleArr of {len(self)} generations, t = {self.t}, "
-                f"g = {self.g}, holding {self.get_n_alleles()} alleles from "
-                f"{self.get_n_organisms()} organisms")
+                f"g = {self.g}, holding {self.n_alleles} alleles from "
+                f"{self.size} organisms")
 
     def __str__(self):
         pass
@@ -1396,49 +1422,78 @@ class AlleleArr:
         bin_size = self.bin_size
         return AlleleArr(arr, params, index, bin_size)
 
-    def get_n_alleles(self):
-        """Return the total number of alleles held in the array"""
+    @property
+    def n_alleles(self):
+        """
+        Return the total number of alleles held in the array
+        """
         return np.sum(self.arr)
 
-    def get_n_organisms(self):
-        """Return the total number of organisms represented in the array"""
+    @property
+    def size(self):
+        """
+        Return the total number of organisms represented in the array
+        """
         return np.sum(self.arr) // 4
 
-    def get_n_at_t(self, t):
-        """Return the population size of generation t"""
-        return np.sum(self.arr[t]) // 4
-
-    def get_bin_n(self):
-        """Return a vector holding the number of loci represented in each
-        spatial bin
+    @property
+    def allele_densities(self):
+        """
+        Return an array of total allele counts per bin and time
         """
         return np.sum(self.arr, axis=3)
 
-    def get_bin_n_at_t(self, t):
-        """Return a vector holding the number of loci represented in each
+    @property
+    def densities(self):
+        """
+        Return an array of organism counts per bin and time
+        """
+        return np.sum(self.arr, axis=(2, 3)) // 4
+
+    @property
+    def freq(self):
+        """
+        Return an array of allele frequencies
+        """
+        return self.arr / self.allele_densities[:, :, :, np.newaxis]
+
+    @property
+    def generation_freq(self):
+        """
+        Return the total allele frequencies for each generation
+        """
+        counts = np.sum(self.arr, axis=(1, 3))[:, :, None]
+        return np.sum(self.arr, axis=1) / counts
+
+    def get_size(self, t):
+        """
+        Return the population size of generation t
+        """
+        return np.sum(self.arr[t]) // 4
+
+    def get_allele_density(self, t):
+        """
+        Return a vector holding the number of loci represented in each
         spatial bin at time t
         """
         return np.sum(self.arr[t, :, :, :], axis=2)
 
-    def get_freq(self):
-        """Return an array of allele frequencies"""
-        n_loci = self.get_bin_n()
-        return self.arr / n_loci[:, :, :, np.newaxis]
-
-    def get_freq_at_t(self, t):
-        """Return an array of allele frequencies at time t"""
-        n_loci = self.get_bin_n()
+    def get_freq(self, t):
+        """
+        Return an array of allele frequencies at time t
+        """
+        n_loci = self.allele_densities
         return self.arr[t] / n_loci[t, :, :, np.newaxis]
 
     def get_subplot(self, sub, t=0):
-        freqs = self.get_freq_at_t(t)
+        freqs = self.get_freq(t)
         bin_mids = plot_util.get_bin_mids(self.bin_size)
         for i in np.arange(3, -1, -1):
             j, k = np.unravel_index(i, (2, 2))
             sub.plot(bin_mids, freqs[:, j, k],
                      color=Constants.allele_colors[i], linewidth=2,
                      label=Constants.allele_legend[i], marker="x")
-        title = "t = " + str(self.t) + " n = " + str(self.get_n_at_t(t))
+        title = "t = " + str(self.t) + " n = " + str(self.get_size(t))
         sub = plot_util.setup_space_plot(sub, 1.01, "allele freq", title)
 
     def plot_freq(self, t=0):
@@ -1452,6 +1507,27 @@ class AlleleArr:
         plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0)
         fig.show()
         return fig
+
+    def plot_freq_history(self):
+        """
+        Make a plot of allele frequencies over time
+        """
+        generation_freq = self.generation_freq
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        times = np.arange(self.g + 1)
+        for i in np.arange(3, -1, -1):
+            j, k = np.unravel_index(i, (2, 2))
+            sub.plot(times, generation_freq[:, j, k],
+                     color=Constants.allele_colors[i], linewidth=2,
+                     label=Constants.allele_legend[i])
+        sub.set_xlim(0, np.max(times))
+        sub.invert_xaxis()
+        sub.set_ylim(-0.01, 1.01)
+        sub.set_xlabel("t before present")
+        sub.set_ylabel("population size")
+        sub.legend(fontsize=8)
+        fig.show()
 
     def plot_history(self, plot_int):
         snaps = np.arange(self.g, -1, -plot_int)

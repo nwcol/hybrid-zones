@@ -286,6 +286,16 @@ def get_distinct_c_matrix(c):
     return c_matrix
 
 
+def get_memory_size(g, K=10_000):
+    """
+    Get est memory use in bytes
+    """
+    all = 0
+    est_pedigree = (K * (4 * 4) + (1 * 4) + (3 * 1)) * (g + 1)
+    all += est_pedigree
+    return all
+
+
 # map the string names of preference models to the functions which implement
 # them
 c_matrix_methods = {"null" : get_null_c_matrix,
