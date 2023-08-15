@@ -29,6 +29,20 @@ if __name__ == "__main__":
 """
 GENERAL TO-DO
 
+- flux edge thing
+
+- adding migrants to pedigrees
+
+- test dispersal models
+
+- fully annotate dispersal models
+
+- fix fitness models if need be
+
+- work on mating model
+
+- add __repr__ etc for base table class, pay some attention to this class
+
 - decide on final directory structure
 
 - this should take into account the best way to run scripts on the cluster
@@ -190,6 +204,20 @@ class Columns:
         if "genotype_code" in col_names:
             kwargs["genotype_code"] = np.zeros(max_rows, dtype=np.uint8)
         filled_rows = 0
+        return cls(filled_rows, max_rows, **kwargs)
+
+    @classmethod
+    def merge(cls, cols1, cols2):
+        filled_rows = len(cols1) + len(cols2)
+        max_rows = filled_rows
+        kwargs = dict()
+        for col_name in cols1.col_names:
+            if col_name in cols2.col_names:
+                kwargs[col_name] = np.concatenate(
+                    (getattr(cols1, col_name), getattr(cols2, col_name))
+                )
+            else:
+                raise AttributeError(f"column {col_name} is not in cols2")
         return cls(filled_rows, max_rows, **kwargs)
 
     def __repr__(self):
@@ -791,6 +819,15 @@ class GenerationTable(Table):
         return cls(cols, params, t)
 
     @classmethod
+    def merge(cls, gen_table1, gen_table2):
+        if gen_table1.t != gen_table2.t:
+            raise AttributeError("time mismatch between generation parts")
+        t = gen_table1.t
+        params = gen_table1.params
+        cols = Columns.merge(gen_table1.cols, gen_table2.cols)
+        return cls(cols, params, t)
+
+    @classmethod
     def from_cols(cls, cols, params, t):
         """
         Instantiate a generation from a bare cols object
@@ -1062,7 +1099,7 @@ class Trial:
         generation_table = GenerationTable.mate(parent_table)
         parent_table.senescence()
         self.pedigree_table.append_generation(parent_table)
-        dispersal.disperse(generation_table)
+        dispersal.main(generation_table)
         fitness.main(generation_table)
         generation_table.cols.sort_by_x()
         generation_table.cols.apply_id(i_0=self.pedigree_table.filled_rows)
@@ -1766,6 +1803,8 @@ class Constants:
 # debug
 if __name__ == "__main__":
     params = parameters.Params(10_000, 10, 0.1)
+
+
     trial = Trial(params, plot_int=1)
     cols = trial.pedigree_table.cols
     gen = trial.pedigree_table.get_generation(0)
