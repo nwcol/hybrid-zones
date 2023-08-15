@@ -1804,7 +1804,6 @@ class Constants:
 if __name__ == "__main__":
     params = parameters.Params(10_000, 10, 0.1)
 
-
     trial = Trial(params, plot_int=1)
     cols = trial.pedigree_table.cols
     gen = trial.pedigree_table.get_generation(0)
