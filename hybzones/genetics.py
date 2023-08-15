@@ -88,7 +88,7 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         col_names = pedigree_table.cols.col_names
         self.time_index = self.get_time_index(params)
         max_rows = self.compute_max_rows(params)
-        cols = pedigrees.Columns.initialize(max_rows, col_names)
+        cols = pedigrees.Columns.empty(max_rows, col_names)
         cols.filled_rows = max_rows  # filled means unfilled lol
         t = self.time_index[0]
         g = params.g
@@ -141,7 +141,7 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         """
 
         :param pedigree_table:
-        :param params:
+        :param sample_ids:
         :return:
         """
         sample = self.sample_last_gen(pedigree_table, sample_ids)
@@ -169,7 +169,7 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         time defined in self.t_slice and sort them by id
 
         :param pedigree_table: pedigree_table
-        :param ids: array of last gen relative ids to sample
+        :param sample_ids: array of last gen relative ids to sample
         """
         last_gen = pedigree_table.get_generation(self.time_index[0])
         sample = last_gen[sample_ids]
@@ -307,28 +307,6 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         pop2_index = self.cols.get_subpop_index(time=max_t, genotype=8)
         ind_pops[pop1_index] = 1
         ind_pops[pop2_index] = 2
-        return ind_pops
-
-    def get_three_pop_inds00(self):
-        """
-        TEST OLD BUG
-
-        """
-        # extremely serious bug! lmao. also no time indexing....
-        n = len(self)
-        pops = np.zeros(n, dtype=np.int32)
-        genotype = self.genotype
-        pops[genotype == 1] = 1 ### here
-        pops[genotype == 8] = 2
-        return pops
-
-    def threepop_failure(self):
-        # extremely serious bug! lmao. also no time indexing....
-        n = len(self)
-        ind_pops = np.zeros(n, dtype=np.int32)
-        subpops = self.get_subpops()
-        ind_pops[subpops == 1] = 1 ### here
-        ind_pops[subpops == 8] = 2
         return ind_pops
 
     def get_one_pop_ids(self):
@@ -782,7 +760,7 @@ class MultiWindows:
         if ylim:
             sub.set_ylim(ylim)
 
-    def plot_pi_xy(pi_XY, title=None):
+    def plot_pi_xy(self, title=None):
         """
         Plot the mean of a set of divergence arrays using a heatmap
         """
