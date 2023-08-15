@@ -29,9 +29,27 @@ if __name__ == "__main__":
 """
 GENERAL TO-DO
 
-- restructure
+- decide on final directory structure
 
-- directories fix
+- this should take into account the best way to run scripts on the cluster
+
+- fix all the functions/methods which save files to make sure they flexibly
+save in the correct directories
+
+- set up intepreter script to allow task selection on the cluster
+
+- learn how to manipulate files and directories with cmd prompt and start 
+doing this more
+
+- learn how to interact with the cluster using prompt or shell (???) ask people
+
+- learn more about running python and package distributions
+
+
+- handling parents when the upper cutoff is less than params.g in pedigree
+sampling
+
+- complex sample defines and simpler sample set objects
 
 - tests directory setup
 
@@ -54,20 +72,11 @@ or access through table property?)
 
 - columns initialization; polish up a bit
 
-- improve names of genotypearr, allelearr functions, theyre pretty bad
-
 - handling zero length columns
 
 - print dtypes below columns when __str__
 
-- handling parents when the upper cutoff is less than params.g in pedigree
-sampling
-
-- complex sample defines and simpler sample set objects
-
 - keeping track of metadata outside of tskit/msprime
-
-- finish up multiwindows class
 
 - get everything set up to be able to make many slices over the same 
 pedigree and run coalescence on each

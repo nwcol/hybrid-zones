@@ -51,7 +51,7 @@ class Params:
         self.mid_2 = 0.5
 
         # scripting
-        self.script = "get_multi_window"
+        self.task = "get_multi_window"
 
         # genetics parameters
         self.sample_sizes = [50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
