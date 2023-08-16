@@ -597,7 +597,7 @@ class MultiWindows:
     def __init__(self, multi_window_list):
         self.params = multi_window_list[0].params
         self.n = len(multi_window_list)
-        self.n_bins = len(multi_window_list[0].pi)
+        self.n_bins = np.shape(multi_window_list[0].pi)[1]
         # objects holding all data
         self.pi_list = []
         self.pi_xy_list = []
@@ -665,9 +665,8 @@ class MultiWindows:
         sub = fig.add_subplot(111)
         mean_pi = self.mean_trial_pi
         n = np.shape(mean_pi)[0]
-        n_bins = np.shape(mean_pi)[1]
-        bin_width = 1 / n_bins
-        x = np.round(np.arange(0, 1, 1 / n_bins), decimals=3)
+        bin_width = 1 / self.n_bins
+        x = np.round(np.arange(0, 1, 1 / self.n_bins), decimals=3)
         parts = sub.violinplot(mean_pi, positions=x, widths=bin_width / 2,
                                showextrema=False)
         sub.scatter(x, np.median(mean_pi, axis=0), color="black",

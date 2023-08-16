@@ -29,6 +29,8 @@ if __name__ == "__main__":
 """
 GENERAL TO-DO
 
+- plots for single multiwindows things
+
 - flux edge thing
 
 - adding migrants to pedigrees
