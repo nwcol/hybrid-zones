@@ -538,7 +538,6 @@ class MultiWindow:
             for i in idx:
                 nonzero_set.append(genotype_set[i])
             genotype_pi[genotype, idx] = self.get_diversities(ts, nonzero_set)
-
         return pi, pi_xy, genotype_pi
 
     def get_diversities(self, ts, sample_sets):
@@ -655,7 +654,6 @@ class MultiWindows:
 
     @property
     def mean_pi_xy(self):
-
         return np.mean(self.mean_trial_pi_xy, axis=0)
 
     def plot_pi(self, title=None, ylim=None):
@@ -761,98 +759,21 @@ class MultiWindows:
     def plot_pi_xy(self, title=None):
         """
         Plot the mean of a set of divergence arrays using a heatmap
-
-        n = np.shape(pi_XY)[0]
-        Z = np.mean(pi_XY, axis=0)
-        std = np.std(pi_XY, axis=0)
-        shape = np.shape(Z)
-        y = x = np.round(np.arange(0, 1, 1 / shape[0]), decimals=3)
-        X, Y = np.meshgrid(x, y)
+        """
+        z = self.mean_pi_xy
+        shape = np.shape(z)
+        _y = _x = np.round(np.arange(0, 1, 1 / shape[0]), decimals=3)
+        x, y = np.meshgrid(_x, _y)
         fig, ax = plt.subplots(figsize=(7.5, 6))
-        colormesh = ax.pcolormesh(X, Y, Z, cmap="plasma")
+        colormesh = ax.pcolormesh(x, y, z, cmap="plasma")
         cbar = plt.colorbar(colormesh)
         plt.xlabel("x coordinate bin")
         plt.ylabel("x coordinate bin")
-        if title != None: ax.set_title(title + ", n = " + str(n))
-        print(Z[0, 0], std[0, 0])
-        print(Z[-1, -1], std[-1, -1])
-                """
-        pass
-
-    def triangle_plot(pedigree, pi_matrix, pi_factor=1e5):
-        """
-        x = dip.get_lastgen(pedigree)[:, PedStruc.Col.x]
-        ancestries = dip.compute_ancestries(pedigree, plot=False)
-        n_bins = np.shape(pi_matrix)[1]
-        binsize = 1 / n_bins
-        right_binlims = np.arange(binsize, 1 + binsize, binsize)
-        midbins = right_binlims - binsize / 2
-        x_bins = np.searchsorted(right_binlims, x)
-        subpop_idx = dip.get_subpop_idx(pedigree[pedigree[:, 3] == 0])
-        mean_ancestries = np.zeros((9, n_bins))
-        for i in np.arange(9):
-            for j in np.arange(n_bins):
-                idx = np.where((subpop_idx == i) & (x_bins == j))[0]
-                mean_ancestries[i, j] = np.mean(ancestries[idx])
-        mean_ancestries[np.isnan(mean_ancestries)] = 0
-        pi_max = np.max(pi_matrix)
-        norm_pi_matrix = pi_matrix * pi_factor
-
-        cmap = lambda anc, pi: (1 - anc, pi * pi_factor, anc)
-
-        x = midbins
-        y = np.arange(9)
-        X, Y = np.meshgrid(x, y)
-        fig, ax = plt.subplots(figsize=(9, 6))
-        my_cmap = []
-        for i in np.arange(9):
-            for j in np.arange(n_bins):
-                if mean_ancestries[i, j] == 0:
-                    my_cmap.append([1, 1, 1])
-                else:
-                    my_cmap.append(
-                        cmap(mean_ancestries[i, j], pi_matrix[i, j]))
-        my_cmap = ListedColormap(my_cmap)
-
-        Z = np.reshape(np.arange(9 * n_bins), (9, n_bins))
-        colormesh = ax.pcolormesh(X, Y, Z, cmap=my_cmap)
-
-        for y in range(Z.shape[0]):
-            for x in range(Z.shape[1]):
-                if mean_ancestries[y, x] == 0: continue
-                plt.text((x + 0.5) * binsize, y,
-                         ("a" + '%.2f' % mean_ancestries[y, x]
-                          + "\n pi \n" + '%.4f' % norm_pi_matrix[y, x]),
-                         horizontalalignment='center', fontsize=4,
-                         verticalalignment='center', color="black"
-                         )
-
-        ax.set_yticks(np.arange(9), pars.subpop_legend)
-        ax.set_xticks(np.arange(0, 1.1, 0.1))
-        ax.set_xlabel("spatial bin")
-
-        plt.subplots_adjust(left=0.1, right=0.65, top=0.85)
-        cax = fig.add_axes([0.7, 0.55, 0.3, 0.3])
-        cp1 = np.linspace(0, 1)
-        cp2 = np.linspace(0, 1 / pi_factor)
-        Cp1, Cp2 = np.meshgrid(cp1, cp2)
-        # make RGB image, p1 to red channel, p2 to blue channel
-        Legend = np.dstack((1 - Cp1, Cp2 * pi_factor, Cp1))
-        # parameters range between 0 and 1
-        cax.imshow(Legend, origin="lower")
-        cax.autoscale(False)
-        cax.set_yticks(np.linspace(0, 49, 6, dtype=np.int32),
-                       np.round(np.linspace(0, 1 / pi_factor, 6), 7))
-        cax.set_xticks(np.linspace(0, 49, 6, dtype=np.int32),
-                       np.round(np.linspace(0, 1, 6), 2))
-        cax.set_xlabel("ancestry")
-        cax.set_ylabel("diversity")
-        cax.set_title("2D cmap legend", fontsize=10)
-        """
-        pass
+        if title:
+            ax.set_title(title)
 
 
-# debug. tests important funcionalities and creates example objects
+# debug. tests important functions and creates example objects
 if __name__ == "__main__":
     _params = parameters.Params(10_000, 10, 0.1)
     _params.sample_sizes = np.full(10, 2)
