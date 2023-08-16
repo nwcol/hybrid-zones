@@ -343,16 +343,16 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
                                      center=[x[-1], 0])
         for i in np.arange(len(pos)):
             pos[i] = np.array([x[i], time[i]])
-        F_colors = [Constants.genotype_colors[node_attr["genotype"]]
+        f_colors = [Constants.genotype_colors[node_attr["genotype"]]
                     for node_attr in F.nodes.values()]
-        M_colors = [Constants.genotype_colors[node_attr["genotype"]]
+        m_colors = [Constants.genotype_colors[node_attr["genotype"]]
                     for node_attr in M.nodes.values()]
         fig, ax = plt.subplots(figsize=(10, 6))
         nx.draw_networkx_edges(G, pos, node_size=40, width=0.5, arrows=False)
-        nx.draw_networkx_nodes(F, pos, edgecolors="black", node_color=F_colors,
+        nx.draw_networkx_nodes(F, pos, edgecolors="black", node_color=f_colors,
                                node_size=40, ax=ax)
         # nx.draw_networkx_labels(F, pos, font_size = 7)
-        nx.draw_networkx_nodes(M, pos, edgecolors="black", node_color=M_colors,
+        nx.draw_networkx_nodes(M, pos, edgecolors="black", node_color=m_colors,
                                node_shape='s', node_size=40, ax=ax)
         # nx.draw_networkx_labels(M, pos, font_size = 7)
         ax.tick_params(left=True, bottom=True, labelleft=True,
@@ -461,11 +461,11 @@ class MultiWindow:
 
     @classmethod
     def load(cls, filename):
-        dict = np.load(filename)
-        pi = dict["pi"]
-        pi_xy = dict["pi_xy"]
-        genotype_pi = dict["genotype_pi"]
-        params = parameters.Params.from_arr(dict["param_arr"])
+        dic = np.load(filename)
+        pi = dic["pi"]
+        pi_xy = dic["pi_xy"]
+        genotype_pi = dic["genotype_pi"]
+        params = parameters.Params.from_arr(dic["param_arr"])
         return cls(pi, pi_xy, genotype_pi, params)
 
     def run(self, tc):
@@ -551,15 +551,15 @@ class MultiWindow:
 
     def get_divergences(self, ts, sample_sets):
         n_sets = len(sample_sets)
-        pi_XY = np.zeros((n_sets, n_sets), dtype=np.float32)
+        pi_xy = np.zeros((n_sets, n_sets), dtype=np.float32)
         for linear_idx in np.arange(np.square(n_sets)):
             idx = np.unravel_index(linear_idx, (n_sets, n_sets))
-            pi_XY[idx] = ts.divergence(
+            pi_xy[idx] = ts.divergence(
                 sample_sets=[sample_sets[idx[0]].node_ids,
-                             sample_sets[idx[1]].node_ids,],
+                             sample_sets[idx[1]].node_ids],
                 mode="branch")
-        pi_XY *= self.params.u
-        return pi_XY
+        pi_xy *= self.params.u
+        return pi_xy
 
     @property
     def mean_pi(self):
@@ -702,7 +702,6 @@ class MultiWindows:
         for i in np.arange(len(self.pi_list)):
             means = np.mean(self.pi_list[i], axis=0)
             stds = np.std(self.pi_list[i], axis=0)
-            n = str(np.shape(self.pi_list[i])[0])
             sub.errorbar(x, means, yerr=stds, capsize=2, color="black")
         sub.set_xlim(-0.1, 1)
         if ylim:
@@ -741,7 +740,7 @@ class MultiWindows:
         for i in np.arange(Constants.n_genotypes):
             genotype_pis = self.mean_trial_genotype_pi[:, i]
             parts = sub.violinplot(genotype_pis, positions=x, widths=0.05,
-                                    showextrema=False)
+                                   showextrema=False)
             sub.scatter(x, np.median(genotype_pis, axis=0),
                         color=Constants.genotype_colors[i])
             for pc in parts['bodies']:

@@ -61,7 +61,6 @@ doing this more
 
 - learn more about running python and package distributions
 
-
 - handling parents when the upper cutoff is less than params.g in pedigree
 sampling
 
@@ -1068,6 +1067,39 @@ class PedigreeTable(Table):
         genotype_arr = arrays.GenotypeArr.from_pedigree(self)
         genotype_arr.plot_size_history(log=log)
 
+    def plot_mortality(self, n_snaps=10):
+        snaps = util.get_snaps(self.g, n_snaps + 1)[1:]  # omit founders
+        if n_snaps in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[n_snaps]
+        else:
+            n_rows = 2
+            n_cols = (n_snaps + 1) // 2
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        for i in np.arange(n_snaps):
+            t = snaps[i]
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            generation_table = self.get_generation(t)
+            genotype_arr = arrays.GenotypeArr.from_generation(generation_table)
+            for i in np.arange(Constants.n_genotypes):
+                mortality_index = generation_table.cols.get_subpop_index(
+                    flag=-1, genotype=i)
+                intrinsic_index = generation_table.cols.get_subpop_index(
+                    flag=-2, genotype=i)
+                mortality_x = generation_table.cols.x[mortality_index]
+                intrinsic_x = generation_table.cols.x[intrinsic_index]
+                all_x = np.concatenate((mortality_x, intrinsic_x))
+                hist = np.histogram(all_x, bins=100, range=(0, 1))[0]
+                death_rate = hist / genotype_arr.arr[0, :, i]
+                x = util.get_bin_mids(genotype_arr.bin_size)
+                ax.plot(x, death_rate, color=Constants.genotype_colors[i],
+                        linewidth=2, marker="x")
+            util.setup_space_plot(ax, 1.01, "death rate", str(t))
+
 
 class Trial:
 
@@ -1140,6 +1172,8 @@ class Trial:
 # debug
 if __name__ == "__main__":
     _params = parameters.Params(10_000, 50, 0.1)
+
+    _params.extrinsic_fitness = True
 
     _trial = Trial(_params, plot_int=5)
     _cols = _trial.pedigree_table.cols

@@ -44,7 +44,7 @@ def extrinsic_fitness(generation_table):
     living_index = generation_table.living_index # mask dead organisms so they
     # aren't killed twice
     living_cols = generation_table.cols[living_index]
-    x = living_cols.x[living_index]
+    x = living_cols.x
     n = len(living_cols)
     if params.female_fitness:
         index_11 = living_cols.get_subpop_index(signal=0)

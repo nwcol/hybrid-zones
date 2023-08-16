@@ -5,6 +5,13 @@ import scipy.optimize as opt
 import time
 
 
+def get_snaps(g, n_snaps):
+    """
+    Get an array of n_snaps evenly spaced integers between g and 0 for
+    """
+    return np.linspace(g, 0, n_snaps).astype(np.int32)
+
+
 def get_ranges(n_ranges):
     """
     Return a 2d array of x ranges
