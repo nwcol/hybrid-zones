@@ -1,6 +1,6 @@
 import numpy as np
 
-from hybzones import math_util
+from hybzones import util
 
 from hybzones.bounds import Bounds
 
@@ -191,7 +191,7 @@ class Matings:
         weighted normally by distance and by the female's signal preference.
         """
         d_vec = x - male_x[bound[0]:bound[1]]
-        p_vec = compute_pd(d_vec, self.params.beta)
+        p_vec = util.compute_pd(d_vec, self.params.beta)
         p_vec *= prefs[bound[0]:bound[1]]
         s = np.sum(p_vec)
         if s > 0:
@@ -226,7 +226,7 @@ class Matings:
         but very improbable
         """
         d_vec = x - male_x
-        p_vec = math_util.compute_pd(d_vec, self.params.beta)
+        p_vec = util.compute_pd(d_vec, self.params.beta)
         p_vec *= prefs
         s = np.sum(p_vec)
         if s > 0:
@@ -263,11 +263,3 @@ class Matings:
         gametes[:, 0] = parent_table.cols.alleles[row_index, a_index]
         gametes[:, 1] = parent_table.cols.alleles[row_index, b_index]
         return gametes
-
-
-def compute_pd(x, s):
-    """
-    Compute a vector of probability density values for a normal distribution
-    with standard deviation s, mean 0.
-    """
-    return 1 / (s * np.sqrt(2 * np.pi)) * np.exp(-0.5 * np.square(x / s))

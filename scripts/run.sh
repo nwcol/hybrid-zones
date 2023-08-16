@@ -7,4 +7,4 @@ export PATH=$PWD/python/bin:$PATH
 export PYTHONPATH=$PWD/packages
 export HOME=$PWD
 
-python3 hybzones/scripts/get_multi_window.py $1 $2 
+python3 hybzones/scripts/interpret.py $1 $2

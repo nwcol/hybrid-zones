@@ -6,9 +6,8 @@ import matplotlib.pyplot as plt
 
 import os
 
-from hybzones import math_util
+from hybzones import util
 
-from hybzones import plot_util
 
 plt.rcParams['figure.dpi'] = 400
 
@@ -193,7 +192,7 @@ class Params:
             c_matrix = c_matrix_methods[self.pref_model](self.c)
         else:
             name = self.pref_model
-            raise Exception("Preference model is not implemented" % name)
+            raise Exception(f"Preference model {name} is not implemented")
         return c_matrix
 
     def print_c(self):
@@ -204,9 +203,9 @@ class Params:
         printout[0, :] = ["            ", "pref B = 1", "pref B = H",
                           "pref B = 2"]
         printout[1:, 0] = ["signal A = 1", "signal A = H", "signal A = 2"]
-        l = len(printout[0, 1])
+        length = len(printout[0, 1])
         c_matrix = self.get_c_matrix()
-        strings = [" " * (l - len(str(i))) + str(i) for i in
+        strings = [" " * (length - len(str(i))) + str(i) for i in
                    np.ravel(c_matrix)]
         printout[1:, 1:] = np.reshape(strings, (3, 3))
         print(printout)
@@ -227,8 +226,8 @@ class Params:
         sub.plot(x, 1 - 2 * s1, color="red", label="1 - 2s_1")
         sub.plot(x, 1 - s1 - s2, color="purple", label="1 - s_1 - s_2")
         sub.plot(x, 1 - 2 * s2, color="blue", label="1 - 2s_2")
-        sub = plot_util.setup_space_plot(sub, 1.01, "relative fitness",
-                                         "environmental fitness")
+        util.setup_space_plot(sub, 1.01, "relative fitness",
+                              "environmental fitness")
         sub.legend(loc="lower left")
 
     def plot_scale(self, center=0.5):
@@ -239,14 +238,13 @@ class Params:
         fig = plt.figure(figsize=(8,6))
         sub = fig.add_subplot(111)
         x = np.linspace(0, 1, 1000)
-        beta = math_util.compute_pd(x - center, self.beta)
-        delta = math_util.compute_pd(x - center, self.delta)
+        beta = util.compute_pd(x - center, self.beta)
+        delta = util.compute_pd(x - center, self.delta)
         beta /= np.max(beta)
         delta /= np.max(delta)
         sub.plot(x, beta, color='red')
         sub.plot(x, delta, color='orange')
-        sub = plot_util.setup_space_plot(sub, 1.01, "normalized density",
-                                         "scale")
+        util.setup_space_plot(sub, 1.01, "normalized density", "scale")
         fig.show()
 
 
@@ -291,10 +289,10 @@ def get_memory_size(g, K=10_000):
     """
     Get est memory use in bytes
     """
-    all = 0
+    total = 0
     est_pedigree = (K * (4 * 4) + (1 * 4) + (3 * 1)) * (g + 1)
-    all += est_pedigree
-    return all
+    total += est_pedigree
+    return total
 
 
 # map the string names of preference models to the functions which implement

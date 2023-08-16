@@ -10,15 +10,13 @@ import networkx as nx
 
 import os
 
-from hybzones import math_util
+from hybzones.pedigrees import Constants
 
 from hybzones import parameters
 
 from hybzones import pedigrees
 
-from hybzones.pedigrees import Constants
-
-# not good
+from hybzones import util
 
 
 if __name__ == "__main__":
@@ -476,8 +474,8 @@ class MultiWindow:
             self.pi[i, :] = pi
             self.pi_xy[i, :, :] = pi_xy
             self.genotype_pi[i, :, :] = genotype_pi
-            print(f"window {i} complete @ " + math_util.get_time_string())
-        print("Multi-window sampling complete @ "+ math_util.get_time_string())
+            print(f"window {i} complete @ " + util.get_time_string())
+        print("Multi-window sampling complete @ " + util.get_time_string())
 
     def get_sample_sets(self, sample_pedigree_table):
         """
@@ -763,7 +761,7 @@ class MultiWindows:
     def plot_pi_xy(self, title=None):
         """
         Plot the mean of a set of divergence arrays using a heatmap
-        """
+
         n = np.shape(pi_XY)[0]
         Z = np.mean(pi_XY, axis=0)
         std = np.std(pi_XY, axis=0)
@@ -778,8 +776,8 @@ class MultiWindows:
         if title != None: ax.set_title(title + ", n = " + str(n))
         print(Z[0, 0], std[0, 0])
         print(Z[-1, -1], std[-1, -1])
-
-    ### plot ancestry AND heterozygosity: needs full pedigree #####################
+                """
+        pass
 
     def triangle_plot(pedigree, pi_matrix, pi_factor=1e5):
         """
@@ -856,11 +854,11 @@ class MultiWindows:
 
 # debug. tests important funcionalities and creates example objects
 if __name__ == "__main__":
-    params = parameters.Params(10_000, 10, 0.1)
-    params.sample_sizes = np.full(10, 2)
-    params.n_windows = 2
-    trial = pedigrees.Trial(params)
-    sample_pedigree = SamplePedigreeTable.from_trial(trial)
-    tc = sample_pedigree.get_tc()
-    ts0 = explicit_coalescent(tc, params)
-    ts1 = reconstructive_coalescent(ts0, params, sample_pedigree.demography)
+    _params = parameters.Params(10_000, 10, 0.1)
+    _params.sample_sizes = np.full(10, 2)
+    _params.n_windows = 2
+    _trial = pedigrees.Trial(_params)
+    _sample_pedigree = SamplePedigreeTable.from_trial(_trial)
+    _tc = _sample_pedigree.get_tc()
+    _ts0 = explicit_coalescent(_tc, _params)
+    _ts1 = reconstructive_coalescent(_ts0, _params, _sample_pedigree.demography)
