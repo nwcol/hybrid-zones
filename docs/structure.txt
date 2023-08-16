@@ -1,0 +1,64 @@
+hybzones/
+├── hybzones/
+│   ├── __init__.py
+│   ├── pedigrees.py
+│   ├── mating.py
+│   ├── bounds.py
+│   ├── dispersal.py
+│   ├── fitness.py
+│   ├── genetics.py
+│   ├── parameters.py
+│   ├── math_util.py
+│   ├── plot_util.py
+│   └── computational_model.py
+├── scripts/
+│   ├── run.sub
+│   ├── run.sh
+│   ├── context.py
+│   ├── interpret.py
+│   ├── eval_params.py
+│   └── ...
+├── parameters/
+│   ├── example.json
+│   └── ...
+├── tests/
+│   ├── __init__.py
+│   └── ...
+├── data/
+│   ├── example/
+│   │    └── ...
+│   └── ...
+├── .gitignore
+└── readme.rst
+
+
+
+idea:
+hybzones/
+├── src/
+│   ├── hybzones/
+│   │	├── __init__.py
+│   │	├── pedigrees.py 			# Columns, Table, GenerationTable, PedigreeTable, Trial
+│   │	├── mating.py 				#
+│   │	├── dispersal.py 			#
+│   │	├── fitness.py 			    #
+│   │	├── arrays.py				# GenotypeArr, AlleleArr, ...
+│   │	├── genetics.py  			# SamplePedigreeTable, Multiwindow, ...
+│   │	├── util.py					# IdMap, Bounds, setup_space_plot, compute_pd, ...
+│   │	├── parameters.py			# Params
+│   │	└── computational.py  		# Model
+│   ├── scripts/
+│   │	├── context.py				# imports from hybzones
+│   │	├── interpret.py 
+│   │	├── get_multi_window.py 
+│   │	└── ...
+│   └── parameters/
+│   	├── params1.json
+│   	├── params2.json
+│   	├── params3.txt
+│   	└── ...  	
+├── docs/
+├── data/
+├── examples/
+├── .gitignore
+└── readme.rst
