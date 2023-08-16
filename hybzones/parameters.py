@@ -36,7 +36,8 @@ class Params:
         self.delta = 0.01
         self.dispersal_model = "random"
         self.edge_model = "closed"
-        self.d_scale = 2
+        self.scale_factor = 3  # max scale effect
+        self.shift_factor = 1  # max shift effect
         self.density_bound = 0.005
 
         # fitness parameters

@@ -1,16 +1,16 @@
 Packages installed on the Cluster
-====================================
+==================================
 
-#. numpy
-#. scipy
-#. matplotlib
-#. msprime
-#. tskit
-#. networkx
-#. IPython 
+1. numpy
+2. scipy
+3. matplotlib
+4. msprime
+5. tskit
+6. networkx
+7. IPython 
 
 Memory Utilization
-====================
+===================
 
 These are the empirical minumum memory requests necessary to run multiwindow coalescence simulations on the CHTC server, a resource I use to run trials in parallel.
 
@@ -20,8 +20,12 @@ These are the empirical minumum memory requests necessary to run multiwindow coa
 
 2,000 generations .......... 10 windows .......... 10.0 Gb / 40 Gb
 
-2,000 generations .......... 100 windows ......... 
+2,000 generations .......... 100 windows ......... 9.0-10.0 Gb / 40 Gb
 
 4,000 generations .......... 10 windows .......... 18.0 Gb / 40 Gb
 
-4,000 generatuons .......... 100 windows .........
+4,000 generatuons .......... 100 windows ......... 19.0 Gb / 40 Gb
+
+8,000 generations .......... 100 windows
+
+10,000 generations ......... 100 windows

@@ -29,6 +29,15 @@ if __name__ == "__main__":
 """
 GENERAL TO-DO
 
+- error
+
+  File "/var/lib/condor/execute/slot1/dir_3197014/hybzones/hybzones/mating.py", line 86, in male_to_rel
+    return self.male_index[male_ids]
+IndexError: index 5057 is out of bounds for axis 0 with size 5057
+
+
+
+
 - flux edge thing
 
 - adding migrants to pedigrees
@@ -1054,6 +1063,14 @@ class PedigreeTable(Table):
         figure.show()
         return figure
 
+    def plot_generation(self, t):
+        generation_table = self.get_generation(t)
+        generation_table.plot()
+
+    def plot_genotype_history(self, log=True):
+        genotype_arr = GenotypeArr.from_pedigree(self)
+        genotype_arr.plot_size_history(log=log)
+
 
 class Trial:
 
@@ -1803,9 +1820,9 @@ class Constants:
 
 # debug
 if __name__ == "__main__":
-    _params = parameters.Params(10_000, 10, 0.1)
+    _params = parameters.Params(10_000, 50, 0.1)
 
-    _trial = Trial(_params, plot_int=1)
+    _trial = Trial(_params, plot_int=5)
     _cols = _trial.pedigree_table.cols
     gen = _trial.pedigree_table.get_generation(0)
     _genotype_arr = GenotypeArr.from_pedigree(_trial.pedigree_table)

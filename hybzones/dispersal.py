@@ -15,6 +15,9 @@ def random_dispersal(generation_table):
     """
     Draw a set of displacements for the generation from a normal
     distribution with mean 0 and standard deviation delta.
+
+    :param generation_table:
+    :return: delta; vector of random displacements
     """
     n = len(generation_table.cols)
     s = generation_table.params.delta
@@ -24,10 +27,14 @@ def random_dispersal(generation_table):
 
 def scale_dispersal(generation_table):
     """
-    Get a vector of dispersal distances using the scale model.
+    Get a vector of dispersal distances using the scale model. Under this
+    model, female dispersal is sampled from a normal distribution with
+    scale params.delta, but male dispersal has a variable scale. Scale is
+    computed for each male using scale_func and is a function of the proportion
+    of adjacent same-signal males.
 
-    Females sample dispersal from normal distributions with std params.delta.
-    Males check the signal
+    :param generation_table:
+    :return: delta; vector of displacements
     """
     params = generation_table.params
     female_index = generation_table.cols.get_subpop_index(sex=0)
@@ -47,18 +54,28 @@ def scale_dispersal(generation_table):
 
 def scale_func(prop, params):
     """
-    Compute standard deviations for male dispersal. Used by the
-    scale_dispersal dispersal model.
+    Compute standard deviations for male dispersal in the scale dispersal
+    model. SD are a linear function of adjacent signal proportion; at prop = 0,
+    the SD equals params.d_scale * params.delta. At prop = 1, SD equals
+    params.delta.
+
+    :param prop: vector of signal proportions
+    :param params:
+    :return: vector of standard deviations
     """
-    max_scale = params.d_scale
-    scale = (1 - max_scale) * prop + max_scale
-    scale *= params.delta
-    return scale
+    fac = params.scale_factor
+    return ((1 - fac) * prop + fac) * params.delta
 
 
 def shift_dispersal(generation_table):
     """
-    Get a vector of dispersal distances using the shift model
+    Get a vector of dispersal distances using the shift model. Under this
+    model, male dispersal distributions have an offset applied to them based
+    on the proportions of same-signal males within a left and right bound,
+    biasing males to move towards males with the same signal phenotype.
+
+    :param generation_table:
+    :return: delta; vector of displacements
     """
     params = generation_table.params
     female_index = generation_table.cols.get_subpop_index(sex=0)
@@ -78,16 +95,16 @@ def shift_dispersal(generation_table):
     return delta
 
 
-def loc_func(l_prop, r_prop, params):
+def loc_func(left_props, right_props, params):
     """
     Compute shifts for male dispersal. Used by the shift_dispersal model
+
+    :param left_props: vector of signal proportions in the left bounds
+    :param right_props: vector of signal proportions in the left bounds
+    :param params:
+    :return: vector of standard deviations
     """
-    # nan errors
-    m = params.d_scale  # slope
-    dif = r_prop - l_prop
-    loc = dif * m
-    loc *= params.delta
-    return loc
+    return (left_props - right_props) * (params.shift_factor * params.delta)
 
 
 def get_signal_props(generation_table, limits):
@@ -95,6 +112,8 @@ def get_signal_props(generation_table, limits):
     Compute the proportion of same-signal males within a spatial limit
     for each male in a generation. Returns a vector of floats
 
+    :param generation_table:
+    :param limits: tuple or list of length 2 defining spatial limits
     """
     male_index = generation_table.cols.get_subpop_index(sex=1)
     male_table = generation_table[male_index]

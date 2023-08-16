@@ -5,14 +5,7 @@ from hybzones import math_util
 from hybzones.bounds import Bounds
 
 
-def compute_pd(x, s):
-    """Compute a vector of probability density values for a normal distribution
-    with standard deviation s, mean 0.
-    """
-    return 1 / (s * np.sqrt(2 * np.pi)) * np.exp(-0.5 * np.square(x / s))
-
-
-class IDmap:
+class IdMap:
 
     def __init__(self, generation_table):
         """
@@ -46,7 +39,7 @@ class IDmap:
         """
         Map relative female IDs to absolute IDs.
 
-        :param relative_female_ids:
+        :param female_ids:
         :return:
         """
         return self.abs[self.female_to_rel(female_ids)]
@@ -74,13 +67,13 @@ class IDmap:
         """
         Map relative male IDs to relative generation IDs
 
-        >>>IDmap.male_to_rel(10)
+        >>>IdMap.male_to_rel(10)
         Out: 17
 
-        >>>IDmap.male_to_rel([10, 20])
+        >>>IdMap.male_to_rel([10, 20])
         Out: array([17, 34], dtype=int64)
 
-        >>>IDmap.male_to_rel(np.array([10, 20, 21]))
+        >>>IdMap.male_to_rel(np.array([10, 20, 21]))
         Out: array([17, 34, 35], dtype=int64)
 
         :return: relative IDs
@@ -99,9 +92,10 @@ class Matings:
         living_mask = parent_table.living_mask
         # mask the parent generation table so it contains only living organisms
         living_table = parent_table[living_mask]
-        self.id_map = IDmap(living_table)
+        self.id_map = IdMap(living_table)
         self.n_offspring = self.compute_n_offspring(living_table)
         self.n_ = np.sum(self.n_offspring)
+        self.n = None
         self.mating_bounds = Bounds(living_table, 0, 1, limits=[
             -self.params.bound, self.params.bound])
         rel_mat_ids, rel_pat_ids = self.run(living_table)
@@ -122,7 +116,8 @@ class Matings:
         """
         k = self.params.K * 2 * self.params.density_bound
         density_bounds = Bounds(parent_table, 0, -1,
-            limits=[-self.params.density_bound, self.params.density_bound])
+                                limits=[-self.params.density_bound,
+                                        self.params.density_bound])
         density = density_bounds.get_bound_pops()
         density = density + self.edge_density_adjustment(parent_table)
         expectation = 2 * np.exp(self.params.r * (1 - (density / k)))
@@ -139,7 +134,8 @@ class Matings:
         female_x = parent_table.cols.x[parent_table.cols.get_sex_index(0)]
         adjustment = np.zeros(len(female_x), dtype=np.float32)
         adjustment[female_x < b] = (b - female_x[female_x < b]) / b * k
-        adjustment[female_x > 1 - b] = (female_x[female_x > 1 - b] - 1 + b) / b * k
+        adjustment[female_x > 1 - b] = ((female_x[female_x > 1 - b] - 1 + b)
+                                        / b * k)
         return adjustment
 
     def compute_pref_index(self, generation_table):
@@ -197,12 +193,12 @@ class Matings:
         d_vec = x - male_x[bound[0]:bound[1]]
         p_vec = compute_pd(d_vec, self.params.beta)
         p_vec *= prefs[bound[0]:bound[1]]
-        S = np.sum(p_vec)
-        if S > 0:
-            p_vec /= S
+        s = np.sum(p_vec)
+        if s > 0:
+            p_vec /= s
             cd = np.cumsum(p_vec)
-            X = np.random.uniform()
-            m_id = np.searchsorted(cd, X) + bound[0]
+            u = np.random.uniform()
+            m_id = np.searchsorted(cd, u) + bound[0]
         else:
             m_id = -1
         return m_id
@@ -214,11 +210,11 @@ class Matings:
         """
         if bound[1] - bound[0] > 0:
             p_vec = np.cumsum(prefs[bound[0]:bound[1]])
-            S = np.sum(p_vec)
-            p_vec /= S
+            s = np.sum(p_vec)
+            p_vec /= s
             cd = np.cumsum(p_vec)
-            X = np.random.uniform()
-            m_id = np.searchsorted(cd, X) + bound[0]
+            u = np.random.uniform()
+            m_id = np.searchsorted(cd, u) + bound[0]
         else:
             m_id = -1
         return m_id
@@ -232,12 +228,12 @@ class Matings:
         d_vec = x - male_x
         p_vec = math_util.compute_pd(d_vec, self.params.beta)
         p_vec *= prefs
-        S = np.sum(p_vec)
-        if S > 0:
-            p_vec /= S
+        s = np.sum(p_vec)
+        if s > 0:
+            p_vec /= s
             cd = np.cumsum(p_vec)
-            X = np.random.uniform()
-            m_id = np.searchsorted(cd, X)
+            u = np.random.uniform()
+            m_id = np.searchsorted(cd, u)
         else:
             m_id = -1
         return m_id
@@ -259,10 +255,19 @@ class Matings:
             row_index = self.maternal_ids
         elif sex == 1:
             row_index = self.paternal_ids
-        A_index = np.random.randint(0, 2, size=self.n)
-        B_index = np.random.randint(0, 2, size=self.n) + 2
+        else:
+            raise ValueError("invalid sex code!")
+        a_index = np.random.randint(0, 2, size=self.n)
+        b_index = np.random.randint(0, 2, size=self.n) + 2
         gametes = np.zeros((self.n, 2), dtype=np.uint8)
-        gametes[:, 0] = parent_table.cols.alleles[row_index, A_index]
-        gametes[:, 1] = parent_table.cols.alleles[row_index, B_index]
+        gametes[:, 0] = parent_table.cols.alleles[row_index, a_index]
+        gametes[:, 1] = parent_table.cols.alleles[row_index, b_index]
         return gametes
 
+
+def compute_pd(x, s):
+    """
+    Compute a vector of probability density values for a normal distribution
+    with standard deviation s, mean 0.
+    """
+    return 1 / (s * np.sqrt(2 * np.pi)) * np.exp(-0.5 * np.square(x / s))
