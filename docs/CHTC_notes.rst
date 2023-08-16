@@ -15,8 +15,13 @@ Memory Utilization
 These are the empirical minumum memory requests necessary to run multiwindow coalescence simulations on the CHTC server, a resource I use to run trials in parallel.
 
 500 generations ............ 10 windows .......... 2.5 Gb / 20 Gb
+
 1,000 generations .......... 10 windows .......... 4.5 Gb / 20 Gb
+
 2,000 generations .......... 10 windows .......... 10.0 Gb / 40 Gb
+
 2,000 generations .......... 100 windows ......... 
+
 4,000 generations .......... 10 windows .......... 18.0 Gb / 40 Gb
+
 4,000 generatuons .......... 100 windows .........
