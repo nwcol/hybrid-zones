@@ -199,7 +199,6 @@ def ring_edge(generation_table, delta):
     generation_table.cols.x += delta
 
 
-
 dispersal_models = {"random": random_dispersal,
                     "scale" : scale_dispersal,
                     "shift" : shift_dispersal}
@@ -221,4 +220,3 @@ def main(generation_table):
     delta = dispersal_models[model](generation_table)
     edge_model = params.edge_model
     edge_models[edge_model](generation_table, delta)
-

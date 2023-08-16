@@ -50,7 +50,7 @@ GENERAL TO-DO
 - fix all the functions/methods which save files to make sure they flexibly
 save in the correct directories
 
-- set up intepreter script to allow task selection on the cluster
+- set up interpreter script to allow task selection on the cluster
 
 - learn how to manipulate files and directories with cmd prompt and start 
 doing this more
@@ -318,23 +318,23 @@ class Columns:
 
     def __getitem__(self, index):
         """
-        Adapted from the __getitem__ method in the tskit basetable class.
+        Adapted from the __getitem__ method in the tskit base table class.
         Return a new Columns instance holding a subset of this instance
         using 1. an integer, 2. a slice, 3. an array of integers (index), or
         4. a boolean mask
 
         example
-        >>>cols
+        >cols
         Cols with 10000 filled rows of 10000 max rows in 8 columns
-        >>>cols[10]
+        >cols[10]
         Cols with 1 filled rows of 1 max rows in 8 columns
-        >>>cols[10].id
+        >cols[10].id
         array([10])
-        >>>cols[10:20]
+        >cols[10:20]
         Cols with 10 filled rows of 10 max rows in 8 columns
-        >>>cols[10, 20, 40, 100, 200]
+        >cols[10, 20, 40, 100, 200]
         Cols with 5 filled rows of 5 max rows in 8 columns
-        >>>cols[10, 20, 40, 100, 200].id
+        >cols[10, 20, 40, 100, 200].id
         array([ 10,  20,  40, 100, 200])
 
         :param index: the integer, slice, index or mask to access
@@ -371,7 +371,7 @@ class Columns:
         the max_rows of this instance
 
         all columns in THIS instance must exist in value, but all columns in
-        value need not exist in THIS (eg value may contain x, but THIS does
+        value need not exist in THIS (e.g. value may contain x, but THIS does
         not; then x is ignored)
 
         :param key:
@@ -402,7 +402,7 @@ class Columns:
 
         :return:
         """
-        return np.column_stack((self.maternal_id , self.paternal_id))
+        return np.column_stack((self.maternal_id, self.paternal_id))
 
     @property
     def signal_alleles(self):
@@ -449,7 +449,7 @@ class Columns:
         genotype = np.zeros(self.filled_rows, dtype=np.uint8)
         for i in np.arange(Constants.n_genotypes):
             genotype[(allele_sums[:, 0] == Constants.allele_sums[i, 0])
-                & (allele_sums[:, 1] == Constants.allele_sums[i, 1])] = i
+                     & (allele_sums[:, 1] == Constants.allele_sums[i, 1])] = i
         return genotype
 
     def apply_id(self, i_0=0):
@@ -532,7 +532,7 @@ class Columns:
     def get_subpop_mask(self, **kwargs):
         """
         Return a mask of organisms with the characters defined in **kwargs
-        eg the intersection of masks for each kwarg
+        e.g. the intersection of masks for each kwarg
 
         """
         mask = np.full(len(self), True, dtype='bool')
@@ -590,7 +590,7 @@ class Columns:
     def reverse_truncate(self, new_min):
         """
         Replace each column array with a view of itself sliced between new_min
-        and its end. max_rows is set to the new length of the columns, eg
+        and its end. max_rows is set to the new length of the columns, e.g.
         max_rows - new_min, and filled_rows is set to
 
         :param new_min: the index to slice from
@@ -632,7 +632,7 @@ class Columns:
         dtype = np.dtype(types)
         arr = np.zeros(self.max_rows, dtype)
         arr["id"] = self.id
-        arr["maternal_id "] = self.maternal_id 
+        arr["maternal_id "] = self.maternal_id
         arr["paternal_id"] = self.paternal_id
         arr["time"] = self.time
         if "sex" in self.col_names:
@@ -771,7 +771,7 @@ class GenerationTable(Table):
         n = params.N
         id = np.full(n, 0, dtype=np.int32)
         time = np.full(n, params.g, dtype=np.int32)
-        maternal_id  = np.full(n, -1, dtype=np.int32)
+        maternal_id = np.full(n, -1, dtype=np.int32)
         paternal_id = np.full(n, -1, dtype=np.int32)
         sex = np.random.choice(np.array([0, 1], dtype=np.uint8), size=n)
         alleles_ = []
@@ -780,12 +780,12 @@ class GenerationTable(Table):
             n_ = params.subpop_n[i]
             if n_ > 0:
                 alleles_.append(np.repeat(genotype[np.newaxis, :], n_, axis=0))
-                lower, upper = params.subpop_lims[i]
-                x_.append(np.random.uniform(lower, upper, n_).astype(np.float32))
+                low, high = params.subpop_lims[i]
+                x_.append(np.random.uniform(low, high, n_).astype(np.float32))
         alleles = np.vstack(alleles_)
         x = np.concatenate(x_)
         flag = np.full(n, 1, dtype=np.int8)
-        cols = Columns(n, n, id=id, maternal_id =maternal_id,
+        cols = Columns(n, n, id=id, maternal_id=maternal_id,
                        paternal_id=paternal_id, time=time, sex=sex, x=x,
                        alleles=alleles, flag=flag)
         cols.sort_by_x()
@@ -804,7 +804,7 @@ class GenerationTable(Table):
         t = parent_generation_table.t - 1
         matings = mating.Matings(parent_generation_table)
         n = matings.n
-        id = np.zeros(n, dtype=np.int32) # do later
+        id = np.zeros(n, dtype=np.int32)  # do later
         maternal_id = matings.abs_maternal_ids
         paternal_id = matings.abs_paternal_ids
         time = cls.get_time_col(n, t)
@@ -812,7 +812,7 @@ class GenerationTable(Table):
         x = parent_generation_table.cols.x[matings.maternal_ids]
         alleles = matings.get_zygotes(parent_generation_table)
         flag = np.full(n, 1, dtype=np.int8)
-        cols = Columns(n, n, id=id, maternal_id =maternal_id,
+        cols = Columns(n, n, id=id, maternal_id=maternal_id,
                        paternal_id=paternal_id, time=time, sex=sex, x=x,
                        alleles=alleles, flag=flag)
         params = parent_generation_table.params
@@ -834,6 +834,7 @@ class GenerationTable(Table):
 
         :param cols:
         :param params:
+        :param t:
         :return:
         """
         return cls(cols, params, t)
@@ -845,7 +846,6 @@ class GenerationTable(Table):
     def __str__(self):
         return (f"GenerationTable at t = {self.t}, self.cols: \n"
                 + self.cols.__str__())
-
 
     @staticmethod
     def get_random_sex(n):
@@ -912,7 +912,7 @@ class PedigreeTable(Table):
     def __init__(self, cols, params, t, g):
         super().__init__(cols, params)
         self.g = g
-        self.t = g
+        self.t = t
 
     @classmethod
     def initialize_from_params(cls, params, col_names):
@@ -1209,7 +1209,7 @@ class GenotypeArr:
 
     def __len__(self):
         """
-        Return the number of generations recorded in the SubpopArr eg the
+        Return the number of generations recorded in the SubpopArr e.g. the
         length of the zeroth 'time' axis
 
         :return: length
@@ -1288,6 +1288,7 @@ class GenotypeArr:
         """
         Plot genotype densities for a single generation on a subplot
 
+        :param sub:
         :param t:
         :return:
         """
@@ -1307,7 +1308,7 @@ class GenotypeArr:
         else:
             time = t
         title = "t = " + str(time) + " n = " + n
-        sub = plot_util.setup_space_plot(sub, y_max, "subpop density", title)
+        plot_util.setup_space_plot(sub, y_max, "subpop density", title)
 
     def plot_density(self, t=0):
         """
@@ -1540,7 +1541,7 @@ class AlleleArr:
                      color=Constants.allele_colors[i], linewidth=2,
                      label=Constants.allele_legend[i], marker="x")
         title = "t = " + str(self.t) + " n = " + str(self.get_size(t))
-        sub = plot_util.setup_space_plot(sub, 1.01, "allele freq", title)
+        plot_util.setup_space_plot(sub, 1.01, "allele freq", title)
 
     def plot_freq(self, t=0):
         """
@@ -1802,10 +1803,10 @@ class Constants:
 
 # debug
 if __name__ == "__main__":
-    params = parameters.Params(10_000, 10, 0.1)
+    _params = parameters.Params(10_000, 10, 0.1)
 
-    trial = Trial(params, plot_int=1)
-    cols = trial.pedigree_table.cols
-    gen = trial.pedigree_table.get_generation(0)
-    genotype_arr = GenotypeArr.from_pedigree(trial.pedigree_table)
-    allele_arr = AlleleArr.from_pedigree(trial.pedigree_table)
+    _trial = Trial(_params, plot_int=1)
+    _cols = _trial.pedigree_table.cols
+    gen = _trial.pedigree_table.get_generation(0)
+    _genotype_arr = GenotypeArr.from_pedigree(_trial.pedigree_table)
+    _allele_arr = AlleleArr.from_pedigree(_trial.pedigree_table)
