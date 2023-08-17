@@ -28,6 +28,8 @@ if __name__ == "__main__":
 """
 GENERAL TO-DO
 
+-saving to proper directories
+
 - plots for single multiwindows things
 
 - flux edge thing
@@ -59,11 +61,6 @@ sampling
 
 - complex sample defines and simpler sample set objects
 
-- make the mating model more efficient and more comprehensible
-lol big task
-
-- .ped file format
-
 - parse out getting/setting attributes (columns) and make sure it works right
 already implemented but worth checking.
 
@@ -78,14 +75,8 @@ or access through table property?)
 
 - handling zero length columns
 
-- print dtypes below columns when __str__
-
-- keeping track of metadata outside of tskit/msprime
-
 - get everything set up to be able to make many slices over the same 
 pedigree and run coalescence on each
-
-- plotting death frequency in space
 
 - handling extinction and ungraceful exits for simulation
 
@@ -93,14 +84,16 @@ pedigree and run coalescence on each
 
 
 class Columns:
+
     """
     The core of pedigree and generation table objects, and therefore of the
-    simulation.
+    simulation. Analogous to a table; each Columns instance holds a bundle
+    of long vectors/arrays, where each row represents a single organism.
     """
 
     # these are the columns essential to the function of the pedigree. they
     # are therefore mandatory to instantiate a Columns instance. time is
-    # arguably not needed but its inclusion is very convenient
+    # arguably not needed but its inclusion is convenient
     _col_names = ["id",
                   "maternal_id",
                   "paternal_id",
@@ -131,8 +124,7 @@ class Columns:
                  "sex": np.uint8,  # takes only 0, 1
                  "x": np.float32,
                  "alleles": np.uint8,  # takes only 0, 1
-                 "flag": np.int8,  # takes -2, -1, 0, 1
-                 "genotype_code": np.uint8}  # takes 0, 1, 2
+                 "flag": np.int8}  # takes -2, -1, 0, 1
 
         if filled_rows > max_rows:
             raise ValueError("filled_rows exceeds max_rows")
@@ -158,8 +150,6 @@ class Columns:
             self.alleles = kwargs["alleles"]
         if "flag" in kwargs:
             self.flag = kwargs["flag"]
-        if "genotype_code" in kwargs:
-            self.genotype_code = kwargs["genotype_code"]
 
         lengths = [len(getattr(self, col)) for col in self.col_names]
         if len(set(lengths)) > 1:
@@ -226,6 +216,9 @@ class Columns:
 
     def __str__(self, n=10):
         """
+        Print a formatted and abbreviated table of columns entries
+
+        example
 
         :param n: number of entries to print from either end
         :return:
@@ -322,17 +315,19 @@ class Columns:
         4. a boolean mask
 
         example
-        >cols
-        Cols with 10000 filled rows of 10000 max rows in 8 columns
-        >cols[10]
-        Cols with 1 filled rows of 1 max rows in 8 columns
-        >cols[10].id
+        >>>cols = Columns.empty(250, [])
+        >>>cols.apply_id()
+        >>>cols
+        Cols with 0 filled rows of 250 max rows in 4 columns
+        >>>cols[10]
+        Cols with 1 filled rows of 1 max rows in 4 columns
+        >>>cols[10].id
         array([10])
-        >cols[10:20]
-        Cols with 10 filled rows of 10 max rows in 8 columns
-        >cols[10, 20, 40, 100, 200]
-        Cols with 5 filled rows of 5 max rows in 8 columns
-        >cols[10, 20, 40, 100, 200].id
+        >>>cols[10:20]
+        Cols with 10 filled rows of 10 max rows in 4 columns
+        >>>cols[10, 20, 40, 100, 200]
+        Cols with 5 filled rows of 5 max rows in 4 columns
+        >>>cols[10, 20, 40, 100, 200].id
         array([ 10,  20,  40, 100, 200])
 
         :param index: the integer, slice, index or mask to access
@@ -414,25 +409,23 @@ class Columns:
             raise AttributeError("no alleles columns exist in this instance")
         return self.alleles[:, [2, 3]]
 
-    @property
-    def signal_sums(self):
+    def get_signal_sums(self):
         if "alleles" not in self.col_names:
             raise AttributeError("no alleles columns exist in this instance")
         return np.sum(self.alleles[:, [0, 1]], axis=1)
 
-    @property
-    def preference_sums(self):
+    def get_preference_sums(self):
         if "alleles" not in self.col_names:
             raise AttributeError("no alleles columns exist in this instance")
         return np.sum(self.alleles[:, [2, 3]], axis=1)
 
     @property
     def signal(self):
-        return self.signal_sums - 2
+        return self.get_signal_sums() - 2
 
     @property
     def preference(self):
-        return self.preference_sums - 2
+        return self.get_preference_sums() - 2
 
     @property
     def allele_sums(self):
@@ -443,6 +436,9 @@ class Columns:
 
     @property
     def genotype(self):
+        """
+        Return vector of genotype codes
+        """
         allele_sums = self.allele_sums
         genotype = np.zeros(self.filled_rows, dtype=np.uint8)
         for i in np.arange(Constants.n_genotypes):
@@ -490,14 +486,14 @@ class Columns:
         """
         return np.nonzero(self.sex == target_sex)[0]
 
-    def get_range_index(self, range):
+    def get_range_index(self, x_range):
         """
         Return an index accessing individuals in the x range [range0, range1)
 
-        :param range: tuple or list of length 2
+        :param x_range: tuple or list of length 2
         :return:
         """
-        return np.nonzero((self.x >= range[0]) & (self.x < range[1]))[0]
+        return np.nonzero((self.x >= x_range[0]) & (self.x < x_range[1]))[0]
 
     def get_subpop_index(self, **kwargs):
         """
@@ -684,12 +680,6 @@ class Columns:
         np.savetxt(file, arr, '%11s', header=header)
         file.close()
 
-    def save_ped(self):
-        """
-        Save as a .ped format file
-        """
-        pass
-
     def save_npz(self, filename):
         """
         Save as a .npz format file
@@ -715,6 +705,11 @@ class Columns:
 
 
 class Table:
+
+    """
+    Base class for GenerationTable and PedigreeTable classes. Additionally,
+    generic slices taken from these classes belong to this class.
+    """
 
     def __init__(self, cols, params):
         self.cols = cols
@@ -759,6 +754,10 @@ class Table:
     def max_rows(self):
         return self.cols.max_rows
 
+    @property
+    def times(self):
+        return np.unique(self.cols.time)
+
 
 class GenerationTable(Table):
 
@@ -800,7 +799,7 @@ class GenerationTable(Table):
     @classmethod
     def mate(cls, parent_generation_table):
         """
-        Form a new generation by mating in the previous generation
+        Get a new generation formed by mating in the parent generation.
 
         :param parent_generation_table:
         :return:
@@ -824,6 +823,9 @@ class GenerationTable(Table):
 
     @classmethod
     def merge(cls, gen_table1, gen_table2):
+        """
+        Merge two GenerationTables together
+        """
         if gen_table1.t != gen_table2.t:
             raise AttributeError("time mismatch between generation parts")
         t = gen_table1.t
@@ -853,16 +855,30 @@ class GenerationTable(Table):
 
     @staticmethod
     def get_random_sex(n):
+        """
+        Get a vector of random choices from [0, 1] representing sex; used
+        in the instantiation of new generations
+        """
         return np.random.choice(np.array([0, 1], dtype=np.uint8), size=n)
 
     @staticmethod
     def get_time_col(n, t):
+        """
+        Get a vector filled with the integer value t for the time column;
+        used in the instantiation of new generations
+        """
         return np.full(n, t, dtype=np.int32)
 
     def sort_by_x(self):
+        """
+        Sort individuals in order of increasing x-position
+        """
         self.cols.sort_by_x()
 
     def apply_id(self):
+        """
+        Give individuals ids
+        """
         self.cols.apply_id()
 
     @property
@@ -942,13 +958,13 @@ class PedigreeTable(Table):
                 f"{self.filled_rows} of {self.max_rows} filled "
                 + self.cols.__str__())
 
-    def append_generation(self, generation_table):
+    def enter_generation(self, generation_table):
         """
         Enter a generation table into the pedigree table in the lowest empty
-        indices. Raises ValueError if the generation cannot fit; this breaks
-        the simulation
+        indices. If the generation cannot fit, extend the columns instance
+        by a number of rows computed by self.compute_new_rows
 
-        :return:
+        :param generation_table:
         """
         self.t = generation_table.t
         now_filled = self.filled_rows + len(generation_table)
@@ -1040,7 +1056,6 @@ class PedigreeTable(Table):
                 xbin = ranges[i]
                 index = generation.cols.get_subpop_index(x=xbin, genotype=geno)
                 arr[i, geno] = np.mean(ancestries[index])
-
         # currently returns nans for empty groups
         return arr
 
@@ -1127,6 +1142,24 @@ class PedigreeTable(Table):
                         linewidth=2, marker="x")
             util.setup_space_plot(ax, 1.01, "death rate", str(t))
 
+    def save_ped(self, filename):
+        """
+        Save as a .ped format file with an associated .dat file
+        """
+        arr, col_names = self.cols.as_arr()
+        header = "".join([f"{x : >12}" for x in col_names])[3:]
+        if ".ped" not in filename:
+            raise ValueError("Please use a .ped filename suffix")
+        file = open(filename, 'w')
+        np.savetxt(file, arr, '%11s', header=header)
+        file.close()
+        dat_filename = filename.replace(".ped", ".dat")
+        datfile = open(dat_filename, 'w')
+        datfile.write(str(self.params))
+        datfile.write("\n")
+        datfile.write(util.get_time_string())
+        datfile.close()
+
 
 class Trial:
 
@@ -1157,7 +1190,7 @@ class Trial:
         generation_table = GenerationTable.get_founding(self.params)
         while self.t > 0:
             generation_table = self.cycle(generation_table)
-        self.pedigree_table.append_generation(generation_table)
+        self.pedigree_table.enter_generation(generation_table)
         self.pedigree_table.truncate()
         if self.plot_int:
             self.figure = self.pedigree_table.plot_history(self.plot_int)
@@ -1171,7 +1204,7 @@ class Trial:
         self.update_t()
         generation_table = GenerationTable.mate(parent_table)
         parent_table.senescence()
-        self.pedigree_table.append_generation(parent_table)
+        self.pedigree_table.enter_generation(parent_table)
         dispersal.main(generation_table)
         fitness.main(generation_table)
         generation_table.cols.sort_by_x()

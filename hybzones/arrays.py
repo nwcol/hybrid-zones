@@ -39,8 +39,8 @@ class GenotypeArr:
         """
         bin_edges, n_bins = util.get_bins(bin_size)
         arr = np.zeros((1, n_bins, Constants.n_genotypes), dtype=np.int32)
-        x = generation_table.x
-        genotype = generation_table.genotype
+        x = generation_table.cols.x
+        genotype = generation_table.cols.genotype
         for i in np.arange(Constants.n_genotypes):
             arr[0, :, i] = np.histogram(x[genotype == i],
                                         bins=bin_edges)[0]

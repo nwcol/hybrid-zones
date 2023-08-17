@@ -160,8 +160,8 @@ class Matings:
         return pref_matrix
 
     def run(self, generation_table):
-        female_x = generation_table.x[self.id_map.female_index]
-        male_x = generation_table.x[self.id_map.male_index]
+        female_x = generation_table.cols.x[self.id_map.female_index]
+        male_x = generation_table.cols.x[self.id_map.male_index]
         pref_matrix = self.compute_pref_matrix(generation_table)
         pref_index = self.compute_pref_index(generation_table)
         maternal_ids = np.full(self.n_, -1, dtype=np.int32)
