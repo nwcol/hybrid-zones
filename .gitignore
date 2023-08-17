@@ -1,7 +1,6 @@
 .idea/
+data/
+env/
 __pycache__
 *.svg
 *.pyc
-
-data/
-

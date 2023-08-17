@@ -25,7 +25,6 @@ if __name__ == "__main__":
     plt.rcParams['figure.dpi'] = 100
     matplotlib.use('Qt5Agg')
 
-
 """
 GENERAL TO-DO
 
@@ -45,14 +44,8 @@ GENERAL TO-DO
 
 - add __repr__ etc for base table class, pay some attention to this class
 
-- decide on final directory structure
-
-- this should take into account the best way to run scripts on the cluster
-
 - fix all the functions/methods which save files to make sure they flexibly
 save in the correct directories
-
-- set up interpreter script to allow task selection on the cluster
 
 - learn how to manipulate files and directories with cmd prompt and start 
 doing this more
@@ -66,14 +59,10 @@ sampling
 
 - complex sample defines and simpler sample set objects
 
-- tests directory setup
-
 - make the mating model more efficient and more comprehensible
 lol big task
 
 - .ped file format
-
-- emergency table extension 
 
 - parse out getting/setting attributes (columns) and make sure it works right
 already implemented but worth checking.
@@ -209,6 +198,14 @@ class Columns:
 
     @classmethod
     def merge(cls, cols1, cols2):
+        """
+        Return a new Columns instance containing the columns of col1 stacked
+        above col2. This will not remove empty rows at the end of col1 and
+        will not sort the resulting Columns instance
+
+        :param cols1:
+        :param cols2:
+        """
         filled_rows = len(cols1) + len(cols2)
         max_rows = filled_rows
         kwargs = dict()
@@ -601,6 +598,32 @@ class Columns:
         self.max_rows -= new_min
         self.filled_rows = self.max_rows
 
+    def extend(self, new_rows):
+        """
+        Extend the columns by new_rows rows. For large Columns instances,
+        this will be a somewhat clumsy operation involving a lot of memory
+        utilization.
+
+        :param new_rows: the number of rows to extend by
+        """
+        for col_name in self.col_names:
+            dtype = getattr(self, col_name).dtype
+            shape = list(np.shape(getattr(self, col_name)))
+            shape[0] += new_rows
+            shape = tuple(shape)
+            new_col = np.zeros(shape, dtype=dtype)
+            new_col[:self.max_rows] = getattr(self, col_name)
+            setattr(self, col_name, new_col)
+        self.max_rows += new_rows
+
+    def append(self, cols):
+        """
+        Append the contents of cols to the end of this instance. Empty rows
+        at the end of this instance will be retained.
+
+        """
+        pass
+
     def as_dict(self):
         """
         Return a dict of columns
@@ -735,26 +758,6 @@ class Table:
     @property
     def max_rows(self):
         return self.cols.max_rows
-
-    @property
-    def time(self):
-        return self.cols.time
-
-    @property
-    def x(self):
-        return self.cols.x
-
-    @property
-    def alleles(self):
-        return self.cols.alleles
-
-    @property
-    def allele_sums(self):
-        return self.cols.allele_sums
-
-    @property
-    def genotype(self):
-        return self.cols.genotype
 
 
 class GenerationTable(Table):
@@ -947,11 +950,30 @@ class PedigreeTable(Table):
 
         :return:
         """
+        self.t = generation_table.t
         now_filled = self.filled_rows + len(generation_table)
-        if now_filled > self.max_rows:
-            raise ValueError("the pedigree table is full!")
+        while now_filled > self.max_rows:
+            new_rows = self.compute_new_rows()
+            self.cols.extend(new_rows)
+            print(f"Cols extended by {new_rows}")
         self.cols[self.filled_rows:now_filled] = generation_table.cols
         self.cols.filled_rows = now_filled
+
+    def compute_new_rows(self):
+        """
+        Compute the number of new rows that should be necessary to fit the
+        rest of the simulation
+        """
+        utilization = self.compute_utilization()
+        return int(utilization * (self.t + 1) * self.size_factor)
+
+    def compute_utilization(self):
+        """
+        Compute the mean number of rows occupied by each generation entered
+        into the pedigree table
+        """
+        g = self.g + 1 - self.t
+        return self.filled_rows // g
 
     def get_generation(self, t):
         """
@@ -1066,6 +1088,11 @@ class PedigreeTable(Table):
     def plot_genotype_history(self, log=True):
         genotype_arr = arrays.GenotypeArr.from_pedigree(self)
         genotype_arr.plot_size_history(log=log)
+
+    def plot_allele_history(self):
+        allele_arr = arrays.AlleleArr.from_pedigree(self)
+        allele_arr.plot_freq_history()
+        allele_arr.plot_history()
 
     def plot_mortality(self, n_snaps=10):
         snaps = util.get_snaps(self.g, n_snaps + 1)[1:]  # omit founders
