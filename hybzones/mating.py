@@ -180,8 +180,10 @@ class Matings:
                 i = upper
             else:
                 pass
-        maternal_ids = maternal_ids[paternal_ids > -1]
-        paternal_ids = paternal_ids[paternal_ids > -1]
+        n_males = len(male_x)
+        mask = np.nonzero((paternal_ids > -1) & (paternal_ids < n_males))
+        maternal_ids = maternal_ids[mask]
+        paternal_ids = paternal_ids[mask]
         self.n = len(maternal_ids)
         return maternal_ids, paternal_ids
 

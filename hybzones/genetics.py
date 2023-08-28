@@ -248,7 +248,7 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
                                           parents_offset=parents_offset)
         # NODES
         node_flag = np.repeat(ind_flag, 2)
-        node_time = np.repeat(self.time, 2).astype(np.float64)
+        node_time = np.repeat(self.cols.time, 2).astype(np.float64)
         pop_methods = {"three_pop": self.get_three_pop_ids,
                        "one_pop": self.get_one_pop_ids}
         ind_pop = pop_methods[self.params.demographic_model]()
@@ -754,7 +754,7 @@ class MultiWindows:
         if ylim:
             sub.set_ylim(ylim)
 
-    def plot_pi_xy(self, title=None):
+    def plot_pi_xy(self, title=None, vmin=None, vmax=None):
         """
         Plot the mean of a set of divergence arrays using a heatmap
         """
@@ -763,16 +763,65 @@ class MultiWindows:
         _y = _x = np.round(np.arange(0, 1, 1 / shape[0]), decimals=3)
         x, y = np.meshgrid(_x, _y)
         fig, ax = plt.subplots(figsize=(7.5, 6))
-        colormesh = ax.pcolormesh(x, y, z, cmap="plasma")
+        if not vmax:
+            vmax = np.max(z)
+        if not vmin:
+            vmin = np.min(z)
+        colormesh = ax.pcolormesh(x, y, z, cmap="plasma", vmin=vmin, vmax=vmax)
         cbar = plt.colorbar(colormesh)
         plt.xlabel("x coordinate bin")
         plt.ylabel("x coordinate bin")
         if title:
             ax.set_title(title)
 
+    def get_summary_stats(self):
+        """
+        Pull a few summary statistics deemed useful for comparing trials
+        """
+        center = self.n_bins // 2
+        center_pi = np.mean(self.mean_pi[center-1:center+1])
+        edge_pi = np.mean([self.mean_pi[0], self.mean_pi[-1]])
+        edge_pi_xy = np.mean([self.mean_pi_xy[0, -1], self.mean_pi_xy[-1, 0]])
+        # should be the same anyway
+        return {"rooted": self.params.rooted,
+                "g": self.params.g,
+                "center_pi": center_pi,
+                "edge_pi": edge_pi,
+                "edge_pi_xy": edge_pi_xy}
+
+
+def plot_summary_stats(dict_list):
+    fig, axs = plt.subplots(1, 3, figsize=(16, 5), sharey='all')
+    center_pi_ax, edge_pi_ax, edge_pi_xy_ax = axs
+    center_pi_ax.set_title("center diversity")
+    edge_pi_ax.set_title("edge diversity")
+    edge_pi_xy_ax.set_title("edge_pi_xy")
+    rooted = np.array([group["rooted"] for group in dict_list])
+    g = np.array([group["g"] for group in dict_list])
+    center_pi = np.array([group["center_pi"] for group in dict_list])
+    edge_pi = np.array([group["edge_pi"] for group in dict_list])
+    edge_pi_xy = np.array([group["edge_pi_xy"] for group in dict_list])
+    for val in [True, False]:
+        if val:
+            color = "blue"
+        else:
+            color = "red"
+        mask = np.array(rooted) == val
+        center_pi_ax.plot(g[mask], center_pi[mask], marker='x', color=color)
+        edge_pi_ax.plot(g[mask], edge_pi[mask], marker='x', color=color)
+        edge_pi_xy_ax.plot(g[mask], edge_pi_xy[mask], marker='x', color=color)
+    for ax in axs:
+        ax.set_xlim(0, np.max(g) + 100)
+        ax.set_ylim(0, 0.0005)
+    fig.tight_layout(pad=3.0)
+    fig.subplots_adjust(right=0.9)
+    fig.show()
+
+
+
 
 # debug. tests important functions and creates example objects
-if __name__ == "__main__":
+if __name__ == "__main__" and 1 == 2:
     _params = parameters.Params(10_000, 10, 0.1)
     _params.sample_sizes = np.full(10, 2)
     _params.n_windows = 2

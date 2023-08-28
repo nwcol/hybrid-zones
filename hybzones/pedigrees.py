@@ -79,7 +79,6 @@ or access through table property?)
 pedigree and run coalescence on each
 
 - handling extinction and ungraceful exits for simulation
-
 """
 
 
@@ -1201,6 +1200,9 @@ class Trial:
         """
         Advance the simulation through a single cycle
         """
+        if len(parent_table) == 0:
+            self.abort()
+            return 1
         self.update_t()
         generation_table = GenerationTable.mate(parent_table)
         parent_table.senescence()
@@ -1211,6 +1213,9 @@ class Trial:
         generation_table.cols.apply_id(i_0=self.pedigree_table.filled_rows)
         self.report()
         return generation_table
+
+    def abort(self):
+        self.t = 0
 
     def update_t(self):
         self.t -= 1
@@ -1231,11 +1236,8 @@ class Trial:
 
 # debug
 if __name__ == "__main__":
-    _params = parameters.Params(10_000, 50, 0.1)
-
-    _params.extrinsic_fitness = True
-
-    _trial = Trial(_params, plot_int=5)
+    _params = parameters.Params(10_000, 10, 0.1)
+    _trial = Trial(_params, plot_int=2)
     _cols = _trial.pedigree_table.cols
     gen = _trial.pedigree_table.get_generation(0)
     _genotype_arr = arrays.GenotypeArr.from_pedigree(_trial.pedigree_table)
