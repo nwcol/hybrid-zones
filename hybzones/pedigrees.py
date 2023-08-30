@@ -32,8 +32,6 @@ PEDIGREES: TO-DO
 
 - test the dispersal models and ensure the computations are correct
 
-- fully annotate dispersal models
-
 - add __repr__ etc for base table class, pay some attention to this class
 
 - fix all the functions/methods which save files to make sure they flexibly
@@ -1210,7 +1208,7 @@ class Trial:
 
 
 # debug
-if __name__ == "__main__":
+if __name__ == "__main__" and 1 == 2:
     _params = parameters.Params(10_000, 10, 0.1)
     _trial = Trial(_params, plot_int=2)
     _cols = _trial.pedigree_table.cols

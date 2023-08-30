@@ -10,6 +10,8 @@ from hybzones import parameters
 
 from hybzones.parameters import Params
 
+from hybzones.constants import Constants
+
 """
 Assumptions.
 
@@ -25,52 +27,104 @@ Things to add to increase the sophisitication of the model
 -migration
 """
 
-space_plotsize = (10, 6)  # or (8, 6)
+
+class Matrix:
+
+    def __init__(self, bin_size):
+        self.bins = np.arange(bin_size/2, 1+bin_size/2, bin_size)
+        self.n_bins = len(self.bins)
+        self.arr = np.zeros((self.n_bins, 9, 2))
+
+    @classmethod
+    def founding(cls, bin_size, params):
+        self = cls(bin_size)
+        init = np.zeros((self.n_bins, 9))
+        for i, lim in enumerate(params.subpop_lims):
+            if len(lim) > 0:
+                index = np.where((self.bins > lim[0])&(self.bins < lim[1]))[0]
+                init[index, i] = params.subpop_n[i] / len(index)
+        self.arr[:, :, :] = init[:, :, np.newaxis]
+        self.standardize()
+        return self
+
+    def standardize(self):
+        sums = np.sum(self.arr, axis=1)
+        self.arr /= sums[:, np.newaxis, :]
 
 
-class Model:
+class MatrixHistory:
 
-    def __init__(self, params, plot_int):
+    def __init__(self):
+        pass
+
+    @classmethod
+    def new(cls, params):
+        pass
+
+
+
+class CompTrial:
+
+    def __init__(self, params, n_plots=10, bin_size=0.01):
         self.params = params
-        self.G = params.g
+        self.bin_size = bin_size
         self.g = params.g
-        self.x = np.arange(0.005, 1.005, 0.01)
-        self.edges = np.arange(0, 1.01, 0.01)
-        self.compute_m(params)
-        self.compute_b(params)
-        self.get_matrix()
-        self.cube = get_master_cube()
-        self.large_c_matrix = get_large_c_matrix(params)
-        self.run(plot_int)
+        self.t = params.g
+        self.edges = np.arange(0, 1+bin_size, bin_size)
+        self.mig = self.compute_mig(bin_size)
+        self.b = self.compute_b(bin_size)
+        #self.get_matrix()
+        #self.cube = get_master_cube()
+        #self.large_c_matrix = get_large_c_matrix(params)
+        #self.run(n_plots)
 
-    def compute_m(self, params):
-        """compute bin migration rates.
+    def compute_mig(self, bin_size, n=1_000_000):
+        """
+        Compute bin migration rates in one direction. A vector of n points in a
+        single bin width is generated, then randomly dispersed out of the bin;
+        the resulting dispersal fractions are measured and returned.
 
         Because I don't want to try to integrate normal distributions and etc,
         m is currently estimated rather than explicitly computed
         """
-        n = 100_000
-        points = np.random.uniform(low=0, high=0.01, size=n)
-        d = np.random.normal(0, scale=params.delta, size=n)
-        points += d
+        time0 = time.time()
+        limits = np.arange(bin_size, bin_size * 5, bin_size)
+        x = np.random.uniform(low=0, high=bin_size, size=n)
+        d = np.random.normal(0, scale=self.params.delta, size=n)
+        x += d
+        mig = np.zeros(len(limits), dtype=np.float32)
+        for i in np.arange(len(limits)):
+            mig[i] = np.sum(x > limits[i])
+        mig /= n
+        for i in np.arange(len(limits) - 1):
+            mig[i] -= mig[i + 1]
+        dur = time.time() - time0
+        print(f"mig computed in : {np.round(dur, 3)} s")
+        return mig
 
-        self.m = len(points[points > 0.01]) / n
-        self.m_3 = len(points[points > 0.03]) / n
-        self.m_2 = len(points[points > 0.02]) / n - self.m_3
-        self.m_1 = len(points[points > 0.01]) / n - self.m_3 - self.m_2
-
-    def compute_b(self, params):
-        """compute b, the fraction of matings which occur between adjacent bins
+    def compute_b(self, bin_size, n=1_000_000):
         """
-        n = 100_000
-        points = np.random.uniform(low=0, high=0.01, size=n)
-        d = np.random.normal(0, scale=params.beta, size=n)
-        points += d
-        rights = points[points > 0.01]
-        self.b = len(rights) / n
+        compute b, the fraction of matings which occur between adjacent bins;
+        a vector
+        """
+        time0 = time.time()
+        limits = np.arange(bin_size, self.params.bound + bin_size, bin_size)
+        x = np.random.uniform(low=0, high=0.01, size=n)
+        d = np.random.normal(0, scale=self.params.beta, size=n)
+        x += d
+        b = np.zeros(len(limits), dtype=np.float32)
+        for i in np.arange(len(limits)):
+            b[i] = np.sum(x > limits[i])
+        b /= n
+        for i in np.arange(len(limits) - 1):
+            b[i] -= b[i + 1]
+        dur = time.time() - time0
+        print(f"b computed in : {np.round(dur, 3)} s")
+        return b
 
     def get_matrix(self):
-        """create the matrix of subpopulations. axis 0 is x, axis 1 is pop,
+        """
+        create the matrix of subpopulations. axis 0 is x, axis 1 is pop,
         axis 2 is sex (0 females, 1 males).
         """
         self.matrix = np.zeros((len(self.x), 9, 2), dtype=np.float32)
@@ -79,6 +133,7 @@ class Model:
         self.matrix[:edges1[1], 0, :] = 1
         self.matrix[edges2[0]:, 8, :] = 1
         self.standardize()
+        return matrix
 
     def run(self, plot_int=1):
 
@@ -409,10 +464,6 @@ def get_master_cube():
          [1, 2, 2, 2], [2, 2, 1, 1], [2, 2, 1, 2], [2, 2, 2, 2]]
     )
     gametes = get_all_gametes(genotypes)
-    allele_sums = np.array(
-        [[2, 2], [2, 3], [2, 4], [3, 2], [3, 3], [3, 4], [4, 2], [4, 3],
-         [4, 4]]
-    )
     master_cube = np.zeros((9, 9, 9))
     for i in np.arange(9):
         for j in np.arange(9):
@@ -431,7 +482,7 @@ def get_master_cube():
             for k in np.arange(4):
                 for z in np.arange(4):
                     index[k, z] = np.where(
-                        (allele_sums == sums[k, z]).all(axis=1)
+                        (Constants.allele_sums == sums[k, z]).all(axis=1)
                     )[0]
             idx = np.unique(index).astype(np.int32)
             n = len(idx)
@@ -442,10 +493,8 @@ def get_master_cube():
             master_cube[i, j, idx] = counts
     mega_cube = np.zeros((100, 9, 9, 9))
     mega_cube[:] = master_cube
-    return (mega_cube)
+    return mega_cube
 
 
-
-
-
-
+params0 = Params(10_000, 20, 0.1)
+trial0 = CompTrial(params0)

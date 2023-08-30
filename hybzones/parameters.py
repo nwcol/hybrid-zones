@@ -29,15 +29,15 @@ class Params:
         self.pref_model = "undesirable"
         self.beta = 0.005
         self.bound = self.beta * 4
+        self.density_bound = 0.005
         self.mating_model = "gaussian"
 
         # dispersal parameters
         self.delta = 0.01
         self.dispersal_model = "random"
         self.edge_model = "closed"
-        self.scale_factor = 3  # max scale effect
-        self.shift_factor = 1  # max shift effect
-        self.density_bound = 0.005
+        self.scale_factor = 2  # max scale effect
+        self.shift_factor = 2  # max shift effect
 
         # fitness parameters
         self.intrinsic_fitness = False
