@@ -24,6 +24,22 @@ if __name__ == "__main__":
     matplotlib.use('Qt5Agg')
 
 
+"""
+GENETICS: TO-DO
+
+Baseline coalescence simulations to investigate diversity
+
+
+Using complex sample definitions
+
+Sampling from the same pedigree many times
+
+Handling earliest-gen parents in slice samples (samples which dont include
+entire time span)
+
+"""
+
+
 def explicit_coalescent(tc, params):
     """
     Run a coalescent simulation over a table collection using the
@@ -588,8 +604,66 @@ class MultiWindow:
         np.savez(filename, pi=self.pi, pi_xy=self.pi_xy,
                  genotype_pi=self.genotype_pi, param_arr=param_arr)
 
+    def plot_pi(self, ylim=None, title=None):
+        """
+        Plot the mean of each multi-window pi arr in self.pi_list
+        """
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        x = np.round(np.arange(0, 1, 1 / len(self.sample_bins)), decimals=3)
+        mean = np.mean(self.pi, axis=0)
+        std = np.std(self.pi, axis=0)
+        sub.errorbar(x, mean, yerr=std, capsize=2, color="black")
+        sub.set_xlim(-0.1, 1)
+        if ylim:
+            sub.set_ylim(ylim)
+        sub.set_xticks(np.arange(0, 1.1, 0.1))
+        sub.grid(visible=True)
+        sub.set_ylabel("nucleotide diversity")
+        sub.set_xlabel("spatial bin (left edge)")
+        if title:
+            sub.set_title(title)
 
-class MultiWindows:
+    def plot_genotype_pi(self, ylim=None):
+        """
+        Plot the mean genotype pis for each multi-window
+        """
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        x = np.round(np.arange(0, 1, 1 / len(self.sample_bins)), decimals=3)
+        for j in np.arange(Constants.n_genotypes):
+            sub.plot(x, self.mean_genotype_pi[j], linewidth=2,
+                color=Constants.genotype_colors[j])
+        sub.set_xticks(np.arange(0, 1.1, 0.1))
+        sub.set_xlim(-0.1, 1)
+        sub.grid(visible=True)
+        sub.set_ylabel("nucleotide diversity")
+        sub.set_xlabel("spatial bin (left edge)")
+        if ylim:
+            sub.set_ylim(ylim)
+
+    def plot_pi_xy(self, title=None, vmin=None, vmax=None):
+        """
+        Plot the mean of a set of divergence arrays using a heatmap
+        """
+        z = self.mean_pi_xy
+        shape = np.shape(z)
+        _y = _x = np.round(np.arange(0, 1, 1 / shape[0]), decimals=3)
+        x, y = np.meshgrid(_x, _y)
+        fig, ax = plt.subplots(figsize=(7.5, 6))
+        if not vmax:
+            vmax = np.max(z)
+        if not vmin:
+            vmin = np.min(z)
+        colormesh = ax.pcolormesh(x, y, z, cmap="plasma", vmin=vmin, vmax=vmax)
+        cbar = plt.colorbar(colormesh)
+        plt.xlabel("x coordinate bin")
+        plt.ylabel("x coordinate bin")
+        if title:
+            ax.set_title(title)
+
+
+class MultiWindowCollection:
     """
     Class holding many instances of MultiWindow
     """
@@ -787,37 +861,51 @@ class MultiWindows:
                 "g": self.params.g,
                 "center_pi": center_pi,
                 "edge_pi": edge_pi,
-                "edge_pi_xy": edge_pi_xy}
+                "edge_pi_xy": edge_pi_xy,
+                "n": self.n}
 
 
 def plot_summary_stats(dict_list):
-    fig, axs = plt.subplots(1, 3, figsize=(16, 5), sharey='all')
-    center_pi_ax, edge_pi_ax, edge_pi_xy_ax = axs
-    center_pi_ax.set_title("center diversity")
-    edge_pi_ax.set_title("edge diversity")
-    edge_pi_xy_ax.set_title("edge_pi_xy")
+    fig = plt.figure(figsize=(8, 6))
+    sub = fig.add_subplot(111)
     rooted = np.array([group["rooted"] for group in dict_list])
     g = np.array([group["g"] for group in dict_list])
     center_pi = np.array([group["center_pi"] for group in dict_list])
     edge_pi = np.array([group["edge_pi"] for group in dict_list])
     edge_pi_xy = np.array([group["edge_pi_xy"] for group in dict_list])
+    n = np.array([group["n"] for group in dict_list])
     for val in [True, False]:
         if val:
             color = "blue"
         else:
             color = "red"
         mask = np.array(rooted) == val
-        center_pi_ax.plot(g[mask], center_pi[mask], marker='x', color=color)
-        edge_pi_ax.plot(g[mask], edge_pi[mask], marker='x', color=color)
-        edge_pi_xy_ax.plot(g[mask], edge_pi_xy[mask], marker='x', color=color)
-    for ax in axs:
-        ax.set_xlim(0, np.max(g) + 100)
-        ax.set_ylim(0, 0.0005)
-    fig.tight_layout(pad=3.0)
-    fig.subplots_adjust(right=0.9)
+        sub.plot(g[mask], center_pi[mask], marker='v', color=color,
+                 label=f"center bin pi, rooted: {val}")
+        sub.plot(g[mask], edge_pi[mask], marker='o', color=color,
+                 label=f"edge bin pi, rooted: {val}")
+        sub.plot(g[mask], edge_pi_xy[mask], marker='s', color=color,
+                 label=f"edge pi_xy, rooted: {val}")
+        for i, label in enumerate(n[mask]):
+            sub.annotate(label, (g[mask][i], edge_pi_xy[mask][i]))
+    sub.legend()
+    sub.set_xlim(0, 25_000)
+    sub.set_xlabel("g. of explicit simulation")
+    sub.set_ylim(0, 0.0005)
+    sub.set_ylabel("diversity")
     fig.show()
 
 
+def go():
+    unrooted_1k = MultiWindowCollection.load_dir("unrooted_1k").get_summary_stats()
+    unrooted_5k = MultiWindowCollection.load_dir("unrooted_5k").get_summary_stats()
+    unrooted_10k = MultiWindowCollection.load_dir("unrooted_10k").get_summary_stats()
+    rooted_100 = MultiWindowCollection.load_dir("rooted_100").get_summary_stats()
+    rooted_1k = MultiWindowCollection.load_dir("rooted_1k").get_summary_stats()
+    rooted_5k = MultiWindowCollection.load_dir("rooted_5k").get_summary_stats()
+    rooted_10k = MultiWindowCollection.load_dir("rooted_10k").get_summary_stats()
+    plot_summary_stats([unrooted_1k, unrooted_5k, unrooted_10k,
+                        rooted_100, rooted_1k, rooted_5k, rooted_10k])
 
 
 # debug. tests important functions and creates example objects
@@ -827,6 +915,4 @@ if __name__ == "__main__" and 1 == 2:
     _params.n_windows = 2
     _trial = pedigrees.Trial(_params)
     _sample_pedigree = SamplePedigreeTable.from_trial(_trial)
-    _tc = _sample_pedigree.get_tc()
-    _ts0 = explicit_coalescent(_tc, _params)
-    _ts1 = reconstructive_coalescent(_ts0, _params, _sample_pedigree.demography)
+    _multiwindow = MultiWindow.new(_sample_pedigree)

@@ -580,3 +580,277 @@ class ClinePars:
         sub = util.setup_space_plot(sub, 1.01, "$A^2$ cline", "Clines")
         sub.legend(snaps)
         fig.show()
+
+
+class RaggedArr:
+    """Class to hold a ragged set of vectors in nested lists; 3d"""
+
+    def __init__(self, shape):
+        """shape must be a tuple of size 2"""
+        self.shape = shape
+        self.arr = [[np.array([], dtype=np.float32)
+                     for j in np.arange(shape[1])] for i in np.arange(shape[0])
+                    ]
+        self.means = None
+        self.stds = None
+        self.sums = None
+
+    def enter_vec(self, vec, i, j):
+        """Enter a vector at coords (i, j)"""
+        self.arr[i][j] = vec
+
+    def get_statistics(self):
+        self.means = np.zeros(self.shape, dtype=np.float32)
+        self.stds = np.zeros(self.shape, dtype=np.float32)
+        self.sums = np.zeros(self.shape, dtype=np.float32)
+        for i in np.arange(self.shape[0]):
+            for j in np.arange(self.shape[1]):
+                if len(self.arr[i][j] > 0):
+                    self.means[i, j] = np.mean(self.arr[i][j])
+                    self.stds[i, j] = np.std(self.arr[i][j])
+                self.sums[i, j] = np.sum(self.arr[i][j])
+
+    def get_n_elements(self):
+        length = 0
+        for i in np.arange(self.shape[0]):
+            for j in np.arange(self.shape[1]):
+                length += len(self.arr[i][j])
+        return length
+
+
+class MatingHistograms:
+    """Kind of a messed up class. Centered on two large arrays of dimensions
+    (subpop, sex, x_bin, histogram) which hold histograms of reproductive success
+    across space and time
+    """
+    n_fecundity_bins = 20
+    n_pairing_bins = 10
+
+    def __init__(self, n_arr, pairing_hist, fecundity_hist, female_pairing_arr,
+                 male_pairing_arr, female_fecundity_arr, male_fecundity_arr,
+                 params, bin_size):
+        self.n_arr = n_arr
+        self.pairing_hist = pairing_hist
+        self.fecundity_hist = fecundity_hist
+        self.female_pairing_arr = female_pairing_arr
+        self.male_pairing_arr = male_pairing_arr
+        self.female_fecundity_arr = female_fecundity_arr
+        self.male_fecundity_arr = male_fecundity_arr
+        self.params = params
+        self.bin_size = bin_size
+        self.bin_mids = np.arange(bin_size/2, 1 + bin_size/2, bin_size)
+
+    @classmethod
+    def from_pedigree(cls, pedigree, bin_size = 0.02):
+        """Get the histograms via analysis of a pedigree. Computes histograms
+        """
+        g = pedigree.params.g
+        female_ids = pedigree.get_female_idx()
+        male_ids = pedigree.get_male_idx()
+        t = pedigree.get_t()
+        female_t = t[female_ids]
+        male_t = t[male_ids]
+        female_ids = female_ids[female_t > 0]
+        male_ids = male_ids[male_t > 0]
+        max_founder_id = np.max(pedigree.get_gen_idx(g))
+        pairings = pedigree.get_parents()[max_founder_id + 1:]
+        mat_ids = np.sort(pairings[:, 0])
+        pat_ids = np.sort(pairings[:, 1])
+        female_fecundity = (np.searchsorted(mat_ids, female_ids + 1)
+                              - np.searchsorted(mat_ids, female_ids))
+        male_fecundity = (np.searchsorted(pat_ids, male_ids + 1)
+                            - np.searchsorted(pat_ids, male_ids))
+        unique_pairings = np.unique(pairings, axis=0)
+        unique_mat = np.sort(unique_pairings[:, 0])
+        unique_pat = np.sort(unique_pairings[:, 1])
+        female_pairings = (np.searchsorted(unique_mat, female_ids + 1)
+                            - np.searchsorted(unique_mat, female_ids))
+        male_pairings = (np.searchsorted(unique_pat, male_ids + 1)
+                          - np.searchsorted(unique_pat, male_ids))
+        subpop_idx = pedigree.get_subpop_idx()
+        female_subpop_idx = subpop_idx[female_ids]
+        male_subpop_idx = subpop_idx[male_ids]
+        x = pedigree.get_x()
+        x_bins = np.arange(0, 1, bin_size)
+        n_bins = len(x_bins)
+        female_x_idx = np.searchsorted(x_bins, x[female_ids]) - 1
+        male_x_idx = np.searchsorted(x_bins, x[male_ids]) - 1
+        fecundity_bins = np.arange(cls.n_fecundity_bins + 1)
+        n_pops = pedigree.n_subpops
+        fecundity_hist = np.zeros((n_pops, 2, n_bins, cls.n_fecundity_bins))
+        pairing_bins = np.arange(cls.n_pairing_bins + 1)
+        pairing_hist = np.zeros((n_pops, 2, n_bins, cls.n_pairing_bins))
+        n_arr = np.zeros((n_pops, 2, n_bins))
+
+        bin_females = []
+        bin_males = []
+        for j in np.arange(n_bins):
+            bin_females.append(np.where(female_x_idx == j))
+            bin_males.append(np.where(male_x_idx == j))
+
+        shape = (n_pops, n_bins)
+        female_pairing_arr = RaggedArr(shape)
+        male_pairing_arr = RaggedArr(shape)
+        female_fecundity_arr = RaggedArr(shape)
+        male_fecundity_arr = RaggedArr(shape)
+
+        for i in np.arange(n_pops):
+            subpop_females = np.where(female_subpop_idx == i)
+            subpop_males = np.where(male_subpop_idx == i)
+            for j in np.arange(n_bins):
+                f_idx = np.intersect1d(bin_females[j], subpop_females)
+                m_idx = np.intersect1d(bin_males[j], subpop_males)
+
+                female_pairing_arr.enter_vec(female_pairings[f_idx], i, j)
+                male_pairing_arr.enter_vec(male_pairings[m_idx], i, j)
+                female_fecundity_arr.enter_vec(female_fecundity[f_idx], i, j)
+                male_fecundity_arr.enter_vec(male_fecundity[m_idx], i, j)
+
+                fecundity_hist[i, 0, j, :] = np.histogram(
+                    female_fecundity[f_idx], bins=fecundity_bins)[0]
+                fecundity_hist[i, 1, j, :] = np.histogram(
+                    male_fecundity[m_idx], bins=fecundity_bins)[0]
+                pairing_hist[i, 0, j, :] = np.histogram(
+                    female_pairings[f_idx], bins=pairing_bins)[0]
+                pairing_hist[i, 1, j, :] = np.histogram(
+                    male_pairings[m_idx], bins=pairing_bins)[0]
+                n_arr[i, 0, j] = len(f_idx)
+                n_arr[i, 1, j] = len(m_idx)
+        return cls(n_arr, pairing_hist, fecundity_hist, female_pairing_arr,
+                 male_pairing_arr, female_fecundity_arr, male_fecundity_arr,
+                 pedigree.params, bin_size)
+
+    def get_statistics(self):
+        self.female_pairing_arr.get_statistics()
+        self.male_pairing_arr.get_statistics()
+        self.female_fecundity_arr.get_statistics()
+        self.male_fecundity_arr.get_statistics()
+
+        self.pairing_statistics()
+        self.fecundity_statistics()
+
+        self.plot_pairing_statistics()
+        self.plot_pairing_heatmap()
+        #self.plot_fecundity_statistics()
+        #self.fecundity_heatmap()
+
+    def pairing_statistics(self):
+        nonzeros = np.nonzero(self.pairing_hist)
+        self.norm_pairings = np.copy(self.pairing_hist)
+        self.norm_pairings[nonzeros] = self.norm_pairings[nonzeros] / \
+                                  self.n_arr[nonzeros[:3]]
+        pairing_bins = np.arange(self.n_pairing_bins)
+        self.mean_pairings = np.sum(self.norm_pairings * pairing_bins, axis=3)
+
+    def fecundity_statistics(self):
+        nonzeros = np.nonzero(self.fecundity_hist)
+        self.norm_fecundity = np.copy(self.fecundity_hist)
+        self.norm_fecundity[nonzeros] = self.norm_fecundity[nonzeros] / \
+                                  self.n_arr[nonzeros[:3]]
+        fecundity_bins = np.arange(self.n_fecundity_bins)
+        self.mean_fecundity = np.sum(self.norm_fecundity * fecundity_bins,
+                                     axis=3)
+
+    def plot_pairing_statistics(self):
+        fig, axs = plt.subplots(3, 3, figsize=(13, 10))
+        for i in np.arange(Constants.n_genotypes):
+            ax = axs[np.unravel_index(i, (3, 3))]
+            color = colors.to_rgb(Constants.genotype_colors[i])
+            femcolor = [c * 0.5 for c in color]
+            ax.errorbar(self.bin_mids, self.female_pairing_arr.means[i, :],
+                        yerr=self.female_pairing_arr.stds[i, :],
+                        color=femcolor, capsize=2,
+                        label="female " + Constants.subpop_legend[i])
+            ax.errorbar(self.bin_mids+0.002,
+                        self.male_pairing_arr.means[i, :],
+                        yerr=self.male_pairing_arr.stds[i, :],
+                        color=color, capsize=2,
+                        label="male " + Constants.subpop_legend[i])
+            ax = util.setup_space_plot(ax, 2.5, "n pairings",
+                                       Constants.subpop_legend[i])
+            ax.legend(fontsize="8")
+        fig.suptitle("Mating Success")
+        fig.tight_layout(pad=1.0)
+        fig.show()
+
+    def plot_pairing_heatmap(self):
+        fig0, axs0 = plt.subplots(3, 3, figsize=(12, 9))
+        pairing_bins = np.arange(self.n_pairing_bins + 1) - 0.5
+        bins = np.arange(0, 1 + self.bin_size, self.bin_size)
+        X, Y = np.meshgrid(bins, pairing_bins)
+        subpop_n = np.sum(self.n_arr, axis=2)
+        subpop_pairing0 = np.sum(self.female_pairing_arr.sums, axis=1)
+        for i in np.arange(Constants.n_genotypes):
+            ax = axs0[np.unravel_index(i, (3, 3))]
+            Z = self.norm_pairings[i, 0, :, :]
+            Z = np.rot90(np.fliplr(Z))
+            p0 = ax.pcolormesh(X, Y, Z, vmin=0, vmax=1, cmap='plasma')
+            ax.set_ylim(-0.5, 4.5)
+            failures = np.sum(self.pairing_hist[i, 0, :, 0])
+            successrate = np.round(1 - failures / subpop_n[i, 0], 2)
+            ax.set_title(f"{Constants.subpop_legend[i]} "
+                         f"ratio {np.round(subpop_pairing0[i] / subpop_n[i, 0], 2)}"
+                         f" successrate {successrate}")
+            fig0.colorbar(p0)
+        fig0.suptitle("Female number of pairings")
+        fig0.tight_layout(pad=1.0)
+        fig0.show()
+
+        fig1, axs1 = plt.subplots(3, 3, figsize=(12, 9))
+        subpop_pairing1 = np.sum(self.male_pairing_arr.sums, axis=1)
+        for i in np.arange(Constants.n_genotypes):
+            ax = axs1[np.unravel_index(i, (3, 3))]
+            Z = self.norm_pairings[i, 1, :, :]
+            Z = np.rot90(np.fliplr(Z))
+            p0 = ax.pcolormesh(X, Y, Z, vmin=0, vmax=1, cmap='plasma')
+            ax.set_ylim(-0.5, 4.5)
+            failures = np.sum(self.pairing_hist[i, 1, :, 0])
+            successrate = np.round(1 - failures / subpop_n[i, 0], 2)
+            ax.set_title(f"{Constants.subpop_legend[i]} "
+                         f"ratio {np.round(subpop_pairing1[i] / subpop_n[i, 1], 2)}"
+                         f" successrate {successrate}")
+            fig1.colorbar(p0)
+        fig1.suptitle("Male number of pairings")
+        fig1.tight_layout(pad=1.0)
+        fig1.show()
+
+    def plot_fecundity_statistics(self):
+        fig, axs = plt.subplots(3, 3, figsize=(13, 10))
+        for i in np.arange(Constants.n_genotypes):
+            ax = axs[np.unravel_index(i, (3, 3))]
+            color = colors.to_rgb(Constants.genotype_colors[i])
+            femcolor = [c * 0.5 for c in color]
+            ax.errorbar(self.bin_mids, self.female_fecundity_arr.means[i, :],
+                        yerr=self.female_fecundity_arr.stds[i, :],
+                        color=femcolor, capsize=2,
+                        label="female " + Constants.subpop_legend[i])
+            ax.errorbar(self.bin_mids+0.002,
+                        self.male_fecundity_arr.means[i, :],
+                        yerr=self.male_fecundity_arr.stds[i, :],
+                        color=color, capsize=2,
+                        label="male " + Constants.subpop_legend[i])
+            ax = util.setup_space_plot(ax, 6, "n offspring",
+                                       Constants.subpop_legend[i])
+            ax.legend(fontsize="8")
+        fig.suptitle("Fecundity")
+        fig.tight_layout(pad=1.0)
+        fig.show()
+
+    def fecundity_heatmap(self):
+        fig0, axs0 = plt.subplots(3, 3, figsize=(12, 9))
+        fecundity_bins = np.arange(self.n_fecundity_bins + 1) - 0.5
+        bins = np.arange(0, 1 + self.bin_size, self.bin_size)
+        X, Y = np.meshgrid(bins, fecundity_bins)
+        subpop_n = np.sum(self.n_arr, axis=2)
+        subpop_fecs = np.sum(self.female_fecundity_arr.sums, axis=1)
+        for i in np.arange(Constants.n_genotypes):
+            ax = axs0[np.unravel_index(i, (3, 3))]
+            Z = self.norm_fecundity[i, 0, :, :]
+            Z = np.rot90(np.fliplr(Z))
+            p0 = ax.pcolormesh(X, Y, Z, vmin=0, vmax=1, cmap='plasma')
+            ax.set_ylim(-0.5, 7.5)
+            ax.set_title(f"{Constants.subpop_legend[i]} "
+                         f"ratio {np.round(subpop_fecs[i] / subpop_n[i, 0], 2)}")
+            fig0.colorbar(p0)
+        fig0.suptitle("Female fecundities")
+        fig0.show()

@@ -13,8 +13,8 @@ from hybzones.bounds import Bounds
 
 def random_dispersal(generation_table):
     """
-    Draw a set of displacements for the generation from a normal
-    distribution with mean 0 and standard deviation delta.
+    Draw a set of displacements for the generation from a normal distribution
+    with mean 0 and standard deviation delta.
 
     :param generation_table:
     :return: delta; vector of random displacements
@@ -85,11 +85,11 @@ def shift_dispersal(generation_table):
     delta[female_index] = np.random.normal(loc=0.0, scale=params.delta,
                                            size=len(female_index))
     left = [-params.bound, 0]
-    left_props, a1_index = get_signal_props(generation_table, left)
+    left_props, hyb_index = get_signal_props(generation_table, left)
     right = [0, params.bound]
-    right_props, a1_index = get_signal_props(generation_table, right)
+    right_props, hyb_index = get_signal_props(generation_table, right)
     loc = loc_func(left_props, right_props, params)
-    loc[a1_index] = 0
+    loc[hyb_index] = 0
     delta[male_index] = np.random.normal(loc=loc, scale=params.delta,
                                          size=len(male_index))
     return delta
@@ -115,8 +115,7 @@ def get_signal_props(generation_table, limits):
     :param generation_table:
     :param limits: tuple or list of length 2 defining spatial limits
     """
-    male_index = generation_table.cols.get_subpop_index(sex=1)
-    male_table = generation_table[male_index]
+    male_table = generation_table.get_subpop(sex=1)
     bounds = Bounds(male_table, 1, 1, limits)
     if limits[0] != 0 and limits[1] != 0:
         self_counting = True
@@ -127,24 +126,22 @@ def get_signal_props(generation_table, limits):
         counts -= 1
     a1_index = male_table.cols.get_subpop_index(signal=0)
     a2_index = male_table.cols.get_subpop_index(signal=2)
-    ah_index = male_table.cols.get_subpop_index(signal=1)
+    hyb_index = male_table.cols.get_subpop_index(signal=1)
     n_males = len(male_table)
     signal_props = np.zeros(n_males, dtype=np.float32)
     signal_props[a1_index] = (
         np.searchsorted(a1_index, bounds.bounds[a1_index, 1])
-        - np.searchsorted(a1_index, bounds.bounds[a1_index, 0])
-    ) / counts[a1_index]
+        - np.searchsorted(a1_index, bounds.bounds[a1_index, 0]))
     signal_props[a2_index] = (
         np.searchsorted(a2_index, bounds.bounds[a2_index, 1])
-        - np.searchsorted(a2_index, bounds.bounds[a2_index, 0])
-    ) / counts[a2_index]
+        - np.searchsorted(a2_index, bounds.bounds[a2_index, 0]))
     if self_counting:
-        signal_props -= 1
+        signal_props -= 1  # returns negative numbers for hybrids; this is ok
     # mask nonzeros
     # check self counting
     signal_props /= counts
     signal_props[np.isnan(signal_props)] = 1
-    return signal_props, ah_index
+    return signal_props, hyb_index
 
 
 def closed_edge(generation_table, delta):

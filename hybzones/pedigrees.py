@@ -26,23 +26,13 @@ if __name__ == "__main__":
     matplotlib.use('Qt5Agg')
 
 """
-GENERAL TO-DO
+PEDIGREES: TO-DO
 
--saving to proper directories
+- flux edges; currently does not work. need to implement migrant creator
 
-- plots for single multiwindows things
-
-- flux edge thing
-
-- adding migrants to pedigrees
-
-- test dispersal models
+- test the dispersal models and ensure the computations are correct
 
 - fully annotate dispersal models
-
-- fix fitness models if need be
-
-- work on mating model
 
 - add __repr__ etc for base table class, pay some attention to this class
 
@@ -54,29 +44,9 @@ doing this more
 
 - learn how to interact with the cluster using prompt or shell (???) ask people
 
-- learn more about running python and package distributions
-
-- handling parents when the upper cutoff is less than params.g in pedigree
-sampling
-
-- complex sample defines and simpler sample set objects
-
-- parse out getting/setting attributes (columns) and make sure it works right
-already implemented but worth checking.
-
 - better __repr__, __str__ for pedigree and generation tables
 
-- when to sort by x and id for max consistency and least use
-
-- sort out how to handle properties between columns vs tables (direct access
-or access through table property?)
-
-- columns initialization; polish up a bit
-
 - handling zero length columns
-
-- get everything set up to be able to make many slices over the same 
-pedigree and run coalescence on each
 
 - handling extinction and ungraceful exits for simulation
 """
@@ -756,6 +726,11 @@ class Table:
     @property
     def times(self):
         return np.unique(self.cols.time)
+
+    def get_subpop(self, **kwargs):
+        cols = self.cols.get_subpop(**kwargs)
+        params = self.params
+        return Table(cols, params)
 
 
 class GenerationTable(Table):

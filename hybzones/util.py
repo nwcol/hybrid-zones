@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+
 import numpy as np
 
 import scipy.optimize as opt
@@ -75,3 +77,24 @@ def optimize_logistic(data, x):
 
 def get_time_string():
     return str(time.strftime("%H:%M:%S", time.localtime()))
+
+
+def plot_spaced_histogram(x, y, y_label, n_bins=100):
+    """
+    Take a vector of x positions and a statistic y; bin the statistic using
+    x positions in n_bins bins and plot the bin means
+    """
+    bin_edges, dump = get_bins(1/n_bins)
+    bin_mids = get_bin_mids(1/n_bins)
+    mean_y = []
+    std_y = []
+    for i in np.arange(n_bins):
+        index = np.nonzero((x > bin_edges[i]) & (x < bin_edges[i + 1]))[0]
+        mean_y.append(np.mean(y[index]))
+        std_y.append(np.std(y[index]))
+    figure = plt.figure(figsize=(8, 6))
+    sub = figure.add_subplot(111)
+    sub.errorbar(bin_mids, mean_y, yerr=std_y, color="black", marker="x")
+    sub.set_xlim(-0.01, 1.01)
+    sub.set_ylabel(y_label)
+    sub.set_title(y_label)
