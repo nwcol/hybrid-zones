@@ -67,16 +67,17 @@ class GenotypeArr:
     def load_txt(cls, filename):
         file = open(filename, 'r')
         string = file.readline()
-        params = parameters.Params.from_string(string)
+        params = parameters.Params.from_string(string[1:])
         raw_arr = np.loadtxt(file, dtype=np.int32)
         file.close()
         shape = np.shape(raw_arr)
         t_dim = shape[0]
         n_genotypes = Constants.n_genotypes
-        bin_size = shape[1] // n_genotypes
-        new_shape = (t_dim, bin_size, n_genotypes)
+        n_bins = shape[1] // n_genotypes
+        new_shape = (t_dim, n_bins, n_genotypes)
         arr = np.reshape(raw_arr, new_shape)
         t_now = 0
+        bin_size = 1 / n_bins
         return cls(arr, params, t_now, bin_size)
 
     def __repr__(self):
@@ -237,12 +238,12 @@ class GenotypeArr:
         sub.legend(["N"] + Constants.subpop_legend, fontsize=8)
         fig.show()
 
-    def plot_history(self, plot_int):
+    def plot_history(self, n_snaps=10):
         """
         Plot several generations on a single figure to provide snapshots of
         simulation history
         """
-        snaps = np.arange(self.g, -1, -plot_int)
+        snaps = np.linspace(self.g, 0, n_snaps + 1).astype(np.int32)
         n_figs = len(snaps)
         if n_figs in Constants.shape_dict:
             n_rows, n_cols = Constants.shape_dict[n_figs]

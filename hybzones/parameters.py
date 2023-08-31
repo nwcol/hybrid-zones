@@ -2,6 +2,8 @@ import json
 
 import numpy as np
 
+import matplotlib
+
 import matplotlib.pyplot as plt
 
 import os
@@ -9,7 +11,9 @@ import os
 from hybzones import util
 
 
-plt.rcParams['figure.dpi'] = 400
+if __name__ == "__main__":
+    plt.rcParams['figure.dpi'] = 100
+    matplotlib.use('Qt5Agg')
 
 
 class Params:
@@ -51,6 +55,7 @@ class Params:
         self.mid_2 = 0.5
 
         # scripting
+        self.history_type = "pedigree_table"
         self.task = "get_multi_window"
 
         # genetics parameters
@@ -229,6 +234,7 @@ class Params:
         util.setup_space_plot(sub, 1.01, "relative fitness",
                               "environmental fitness")
         sub.legend(loc="lower left")
+        fig.show()
 
     def plot_scale(self, center=0.5):
         """

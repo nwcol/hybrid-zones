@@ -1031,11 +1031,11 @@ class PedigreeTable(Table):
         # currently returns nans for empty groups
         return arr
 
-    def plot_history(self, plot_int):
+    def plot_history(self, n_plots):
         """
 
         """
-        snaps = np.arange(self.g, -1, -plot_int)
+        snaps = np.linspace(self.g, 0, n_plots + 1).astype(np.int32)
         n_figs = len(snaps)
         if n_figs in Constants.shape_dict:
             n_rows, n_cols = Constants.shape_dict[n_figs]
@@ -1081,7 +1081,7 @@ class PedigreeTable(Table):
         allele_arr.plot_freq_history()
         allele_arr.plot_history()
 
-    def plot_mortality(self, n_snaps=10):
+    def plot_mortality(self, n_snaps=10, y_max=0.1):
         snaps = util.get_snaps(self.g, n_snaps + 1)[1:]  # omit founders
         if n_snaps in Constants.shape_dict:
             n_rows, n_cols = Constants.shape_dict[n_snaps]
@@ -1099,6 +1099,7 @@ class PedigreeTable(Table):
             ax = axs[index]
             generation_table = self.get_generation(t)
             genotype_arr = arrays.GenotypeArr.from_generation(generation_table)
+            n_deaths = 0
             for i in np.arange(Constants.n_genotypes):
                 mortality_index = generation_table.cols.get_subpop_index(
                     flag=-1, genotype=i)
@@ -1112,7 +1113,9 @@ class PedigreeTable(Table):
                 x = util.get_bin_mids(genotype_arr.bin_size)
                 ax.plot(x, death_rate, color=Constants.genotype_colors[i],
                         linewidth=2, marker="x")
-            util.setup_space_plot(ax, 1.01, "death rate", str(t))
+                n_deaths += len(all_x)
+            util.setup_space_plot(ax, y_max, "death rate",
+                                  f"{str(t)}: {n_deaths}")
 
     def save_ped(self, filename):
         """
@@ -1135,18 +1138,25 @@ class PedigreeTable(Table):
 
 class Trial:
 
-    def __init__(self, params, plot_int=None):
+    def __init__(self, params, n_snaps=None):
         self.run_time_0 = time.time()
         self.run_time_vec = np.zeros(params.g + 1)
         self.report_int = max(min(100, params.g // 10), 1)
-        self.plot_int = plot_int
+        self.n_snaps = n_snaps
         self.figure = None
         self.complete = False
         self.g = params.g
         self.t = params.g
         self.params = params
-        self.pedigree_table = PedigreeTable.initialize_from_params(params,
-            col_names=["sex", "x", "alleles", "flag"])
+        if params.history_type == "pedigree_table":
+            self.history_type = "pedigree_table"
+            self.pedigree_table = PedigreeTable.initialize_from_params(params,
+                col_names=["sex", "x", "alleles", "flag"])
+            self.genotype_arr = None
+        elif params.history_type == "genotype_arr":
+            self.history_type = "genotype_arr"
+            self.genotype_arr = arrays.GenotypeArr.initialize(params)
+            self.pedigree_table = None
         self.run()
 
     @classmethod
@@ -1162,12 +1172,24 @@ class Trial:
         generation_table = GenerationTable.get_founding(self.params)
         while self.t > 0:
             generation_table = self.cycle(generation_table)
-        self.pedigree_table.enter_generation(generation_table)
-        self.pedigree_table.truncate()
-        if self.plot_int:
-            self.figure = self.pedigree_table.plot_history(self.plot_int)
+        self.record_history(generation_table)
+        if self.history_type == "pedigree_table":
+            self.pedigree_table.truncate()
+        if self.n_snaps:
+            if self.history_type == "pedigree_table":
+                self.figure = self.pedigree_table.plot_history(self.n_snaps)
+            elif self.history_type == "genotype_arr":
+                self.figure = self.genotype_arr.plot_history(self.n_snaps)
             self.figure.show()
         print("simulation complete")
+
+    def record_history(self, generation_table):
+        if self.history_type == "pedigree_table":
+            self.pedigree_table.enter_generation(generation_table)
+        elif self.history_type == "genotype_arr":
+            self.genotype_arr.enter_generation(generation_table)
+        else:
+            raise AttributeError("invalid history type")
 
     def cycle(self, parent_table):
         """
@@ -1179,11 +1201,12 @@ class Trial:
         self.update_t()
         generation_table = GenerationTable.mate(parent_table)
         parent_table.senescence()
-        self.pedigree_table.enter_generation(parent_table)
+        self.record_history(parent_table)
         dispersal.main(generation_table)
         fitness.main(generation_table)
         generation_table.cols.sort_by_x()
-        generation_table.cols.apply_id(i_0=self.pedigree_table.filled_rows)
+        if self.history_type == "pedigree_table":
+            generation_table.cols.apply_id(i_0=self.pedigree_table.filled_rows)
         self.report()
         return generation_table
 
@@ -1208,9 +1231,10 @@ class Trial:
 
 
 # debug
-if __name__ == "__main__" and 1 == 2:
+if __name__ == "__main__":
     _params = parameters.Params(10_000, 10, 0.1)
-    _trial = Trial(_params, plot_int=2)
+    _params.extrinsic_fitness = True
+    _trial = Trial(_params, n_snaps=10)
     _cols = _trial.pedigree_table.cols
     gen = _trial.pedigree_table.get_generation(0)
     _genotype_arr = arrays.GenotypeArr.from_pedigree(_trial.pedigree_table)

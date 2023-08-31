@@ -12,7 +12,13 @@ def get_multi_window(params, name_stem, number):
     get_multi_window.main(params, name_stem, number)
 
 
-task_dict = {"get_multi_window": get_multi_window}
+def get_genotype_arr(params, name_stem, number):
+    import get_genotype_arr
+    get_genotype_arr.main(params, name_stem, number)
+
+
+task_dict = {"get_multi_window": get_multi_window,
+             "get_genotype_arr": get_genotype_arr}
 
 
 def main():

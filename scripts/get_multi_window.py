@@ -1,5 +1,3 @@
-import sys
-
 from context import pedigrees
 
 from context import genetics
