@@ -841,7 +841,7 @@ class MultiWindowCollection:
             vmax = np.max(z)
         if not vmin:
             vmin = np.min(z)
-        colormesh = ax.pcolormesh(x, y, z, cmap="plasma", vmin=vmin, vmax=vmax)
+        colormesh = ax.pcolormesh(x, y, z, cmap="plasma", vmin=0.00018, vmax=0.00038)
         cbar = plt.colorbar(colormesh)
         plt.xlabel("x coordinate bin")
         plt.ylabel("x coordinate bin")
@@ -888,24 +888,18 @@ def plot_summary_stats(dict_list):
                  label=f"edge pi_xy, rooted: {val}")
         for i, label in enumerate(n[mask]):
             sub.annotate(label, (g[mask][i], edge_pi_xy[mask][i]))
+    sub.plot(g[rooted == True], center_pi[rooted] - center_pi[rooted==False],
+             color="black", label="center pi diff", marker='v')
+    sub.plot(g[rooted == True], edge_pi[rooted] - edge_pi[rooted==False],
+             color="black", label="edge pi diff", marker='o')
+    sub.plot(g[rooted == True], edge_pi_xy[rooted] - edge_pi_xy[rooted==False],
+             color="black", label="edge pi_xy diff", marker='s')
     sub.legend()
     sub.set_xlim(0, 25_000)
     sub.set_xlabel("g. of explicit simulation")
     sub.set_ylim(0, 0.0005)
-    sub.set_ylabel("diversity")
+    sub.set_ylabel("nucleotide diversity/divergence")
     fig.show()
-
-
-def go():
-    unrooted_1k = MultiWindowCollection.load_dir("unrooted_1k").get_summary_stats()
-    unrooted_5k = MultiWindowCollection.load_dir("unrooted_5k").get_summary_stats()
-    unrooted_10k = MultiWindowCollection.load_dir("unrooted_10k").get_summary_stats()
-    rooted_100 = MultiWindowCollection.load_dir("rooted_100").get_summary_stats()
-    rooted_1k = MultiWindowCollection.load_dir("rooted_1k").get_summary_stats()
-    rooted_5k = MultiWindowCollection.load_dir("rooted_5k").get_summary_stats()
-    rooted_10k = MultiWindowCollection.load_dir("rooted_10k").get_summary_stats()
-    plot_summary_stats([unrooted_1k, unrooted_5k, unrooted_10k,
-                        rooted_100, rooted_1k, rooted_5k, rooted_10k])
 
 
 # debug. tests important functions and creates example objects
@@ -916,3 +910,36 @@ if __name__ == "__main__" and 1 == 2:
     _trial = pedigrees.Trial(_params)
     _sample_pedigree = SamplePedigreeTable.from_trial(_trial)
     _multiwindow = MultiWindow.new(_sample_pedigree)
+
+
+if __name__ == "__main__":
+    unrooted_10 = MultiWindowCollection.load_dir(
+        "unrooted_10").get_summary_stats()
+    unrooted_100 = MultiWindowCollection.load_dir(
+        "unrooted_100").get_summary_stats()
+    unrooted_1k = MultiWindowCollection.load_dir(
+        "unrooted_1k").get_summary_stats()
+    unrooted_5k = MultiWindowCollection.load_dir(
+        "unrooted_5k").get_summary_stats()
+    unrooted_10k = MultiWindowCollection.load_dir(
+        "unrooted_10k").get_summary_stats()
+    unrooted_15k = MultiWindowCollection.load_dir(
+        "unrooted_15k").get_summary_stats()
+    unrooted_20k = MultiWindowCollection.load_dir(
+        "unrooted_20k").get_summary_stats()
+    rooted_10 = MultiWindowCollection.load_dir(
+        "rooted_10").get_summary_stats()
+    rooted_100 = MultiWindowCollection.load_dir(
+        "rooted_100").get_summary_stats()
+    rooted_1k = MultiWindowCollection.load_dir("rooted_1k").get_summary_stats()
+    rooted_5k = MultiWindowCollection.load_dir("rooted_5k").get_summary_stats()
+    rooted_10k = MultiWindowCollection.load_dir(
+        "rooted_10k").get_summary_stats()
+    rooted_15k = MultiWindowCollection.load_dir(
+        "rooted_15k").get_summary_stats()
+    rooted_20k = MultiWindowCollection.load_dir(
+        "rooted_20k").get_summary_stats()
+    plot_summary_stats([unrooted_10, unrooted_100, unrooted_1k, unrooted_5k,
+                        unrooted_10k, unrooted_15k, unrooted_20k,
+                        rooted_10, rooted_100, rooted_1k, rooted_5k,
+                        rooted_10k, rooted_15k, rooted_20k])
