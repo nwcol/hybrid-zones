@@ -98,3 +98,18 @@ def plot_spaced_histogram(x, y, y_label, n_bins=100):
     sub.set_xlim(-0.01, 1.01)
     sub.set_ylabel(y_label)
     sub.set_title(y_label)
+
+
+def get_figure(n, length):
+    """
+    :param n: number of desired post-founder subplots.
+    """
+    n += 1
+    snaps = np.linspace(length, 0, n).astype(np.int32)
+
+    ### fix
+    n_rows = 2
+    n_cols = (snaps + 1) // 2
+    plot_shape = (n_rows, n_cols)
+    size = (n_cols * 4, n_rows * 3)
+    figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')

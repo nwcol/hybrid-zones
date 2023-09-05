@@ -17,8 +17,14 @@ def get_genotype_arr(params, name_stem, number):
     get_genotype_arr.main(params, name_stem, number)
 
 
+def get_pedigree_table(params, name_stem, number):
+    import get_pedigree_table
+    get_pedigree_table.main(params, name_stem, number)
+
+
 task_dict = {"get_multi_window": get_multi_window,
-             "get_genotype_arr": get_genotype_arr}
+             "get_genotype_arr": get_genotype_arr,
+             "get_pedigree_table": get_pedigree_table}
 
 
 def main():

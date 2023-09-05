@@ -1232,7 +1232,8 @@ class Trial:
 
 # debug
 if __name__ == "__main__":
-    _params = parameters.Params(10_000, 10, 0.1)
+    _params = parameters.Params(10_000, 400, 0.1)
+    _params.dispersal_model = "scale"
     _params.extrinsic_fitness = True
     _trial = Trial(_params, n_snaps=10)
     _cols = _trial.pedigree_table.cols

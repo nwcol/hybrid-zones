@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+import os
+
 import scipy.optimize as opt
 
 from hybzones.constants import Constants
@@ -11,6 +13,11 @@ from hybzones.constants import Constants
 from hybzones import parameters
 
 from hybzones import util
+
+
+if __name__ == "__main__":
+    plt.rcParams['figure.dpi'] = 100
+    matplotlib.use('Qt5Agg')
 
 
 class GenotypeArr:
@@ -238,6 +245,26 @@ class GenotypeArr:
         sub.legend(["N"] + Constants.subpop_legend, fontsize=8)
         fig.show()
 
+    def get_history_subplot(self, sub, log=True):
+        """
+        Make a plot of per-genotype population sizes over time
+        """
+        n_vec = self.generation_sizes
+        times = np.arange(self.g + 1)
+        sub.plot(times, n_vec, color="black")
+        for i in np.arange(9):
+            sub.plot(times, np.sum(self.arr[:, :, i], axis=1),
+                     color=Constants.genotype_colors[i], linewidth=2)
+        sub.set_xlim(0, np.max(times))
+        sub.invert_xaxis()
+        if log:
+            sub.set_yscale("log")
+        else:
+            y_lim = np.round(self.params.K * 1.1)
+            sub.set_ylim(0, y_lim)
+        sub.set_xlabel("t before present")
+        sub.set_ylabel("population size")
+
     def plot_history(self, n_snaps=10):
         """
         Plot several generations on a single figure to provide snapshots of
@@ -270,6 +297,18 @@ class GenotypeArr:
                       framealpha=1, edgecolor="black")
         figure.show()
         return figure
+
+    def plot_mean_density(self):
+        geno_sums = np.sum(self.arr, axis=2)
+        mean = np.mean(geno_sums, axis=0)
+        std = np.std(geno_sums, axis=0)
+        fig = plt.figure(figsize=(8,6))
+        sub = fig.add_subplot()
+        x = util.get_bin_mids(self.bin_size)
+        sub.errorbar(x, mean, yerr=std, marker="x", color="black")
+        ymax = np.max(mean) * 1.2
+        util.setup_space_plot(sub, ymax, "mean", "mean pop")
+        fig.show()
 
 
 class AlleleArr:
@@ -517,7 +556,7 @@ class ClinePars:
 
     @classmethod
     def from_allele_arr(cls, allele_arr):
-        allele_freq = allele_arr.get_freq()
+        allele_freq = allele_arr.freq
         a2_freq = allele_freq[:, :, 0, 1]
         x = util.get_bin_mids(allele_arr.bin_size)
         params = allele_arr.params
@@ -549,7 +588,7 @@ class ClinePars:
     def plot(self):
         length = len(self)
         t = np.arange(length)
-        fig, axs = plt.subplots(2, 1, figsize=(8, 7), sharex='all')
+        fig, axs = plt.subplots(2, 1, figsize=(6, 8), sharex='all')
         x_ax, k_ax = axs[0], axs[1]
         k_ax.plot(t, self.k_vec, color="black", linewidth=2)
         x_ax.plot(t, np.full(length, 0.5), color="red", linestyle="dashed")
@@ -581,6 +620,235 @@ class ClinePars:
         sub = util.setup_space_plot(sub, 1.01, "$A^2$ cline", "Clines")
         sub.legend(snaps)
         fig.show()
+
+
+class GenotypeArrCollection:
+
+    """
+    Object for group analysis of several genotype arrays. It is expected
+    that all genotype arrays will share an identical params instance ....
+    """
+
+    def __init__(self, genotype_arrs):
+        self.genotype_arrs = []
+        for arr in genotype_arrs:
+            self.genotype_arrs.append(arr)
+        self.params = self.genotype_arrs[0].params
+        self.allele_arrs = self.get_allele_arrs()
+        self.cline_pars = self.get_cline_pars()
+        self.length = len(genotype_arrs[0].arr)
+        self.bin_size = self.genotype_arrs[0].bin_size
+
+    @classmethod
+    def load_directory(cls, directory):
+        base_dir = os.getcwd().replace(r"\hybzones", "") + r"\hybzones"
+        directory = base_dir + "\\data\\" + directory + "\\"
+        file_names = os.listdir(directory)
+        file_names = [directory + filename for filename in file_names]
+        genotype_arrs = []
+        for file_name in file_names:
+            genotype_arrs.append(GenotypeArr.load_txt(file_name))
+        return cls(genotype_arrs)
+
+    def check_params(self):
+        pass
+
+    def append_arr(self, genotype_arr):
+        self.genotype_arrs.append(genotype_arr)
+
+    def append_list(self, genotype_arrs):
+        for arr in genotype_arrs:
+            self.genotype_arrs.append(arr)
+
+    def get_cline_pars(self):
+        cline_pars = []
+        for arr in self.genotype_arrs:
+            cline_pars.append(ClinePars.from_genotype_arr(arr))
+        return cline_pars
+
+    def get_allele_arrs(self):
+        allele_arrs = []
+        for arr in self.genotype_arrs:
+            allele_arrs.append(AlleleArr.from_subpop_arr(arr))
+        return allele_arrs
+
+    def plot_cline_pars(self):
+        n = len(self.cline_pars)
+        bin_size = self.cline_pars[0].bin_size
+        params = self.params
+        length = len(self.cline_pars[0].x_vec)
+        x_arr = np.zeros((length, n))
+        k_arr = np.zeros((length, n))
+        for i, pars in enumerate(self.cline_pars):
+            x_arr[:, i] = pars.x_vec
+            k_arr[:, i] = pars.k_vec
+        mean_x = np.mean(x_arr, axis=1)
+        std_x = np.std(x_arr, axis=1)
+        mean_k = np.mean(k_arr, axis=1)
+        std_k = np.std(k_arr, axis=1)
+        #
+        t = np.arange(length)
+        fig, axs = plt.subplots(2, 1, figsize=(6, 8), sharex='all')
+        x_ax, k_ax = axs[0], axs[1]
+        k_ax.errorbar(t, mean_k, yerr=std_k, color="black", linewidth=2)
+        x_ax.plot(t, np.full(length, 0.5), color="red", linestyle="dashed")
+        x_ax.errorbar(t, mean_x, yerr=std_x, color="black", linewidth=2)
+        k_ax.set_ylim(0, 200)
+        x_ax.set_ylim(0, 1)
+        k_ax.set_xlim(0, length)
+        axs[1].set_xlabel("generations before present")
+        x_ax.set_ylabel("x_0")
+        k_ax.set_ylabel("k")
+        x_ax.set_title("cline parameter x_0")
+        k_ax.set_title("cline parameter k")
+        x_ax.invert_xaxis()
+        fig.suptitle("Cline Parameters")
+        fig.tight_layout(pad=1.0)
+        fig.show()
+
+    def plot_clines(self, n=10):
+        """
+        Plot the cline approximation at n even intervals in time
+        """
+        n += 1
+        length = len(self.cline_pars[0].x_vec)
+        snaps = np.linspace(length - 1, 0, n, dtype=np.int32)
+        xrange = util.get_bin_mids(self.cline_pars[0].bin_size)
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        colors = matplotlib.cm.YlGnBu(np.linspace(0.2, 1, n))
+        for i in np.arange(n):
+            this_x = []
+            this_k = []
+            t = snaps[i]
+            for pars in self.cline_pars:
+                this_x.append(pars.x_vec[t])
+                this_k.append(pars.k_vec[t])
+            k = np.mean(this_k)
+            x = np.mean(this_x)
+            std_x = np.std(this_x)
+            y = ClinePars.logistic_fxn(xrange, k, x)
+            sub.plot(xrange, y, color=colors[i], linewidth=2)
+            sub.errorbar(x, 0.5, xerr=std_x, color=colors[i], capsize=3,
+                         linewidth=2)
+        sub = util.setup_space_plot(sub, 1.01, "$A^2$ cline", "Clines")
+        sub.legend(snaps)
+        fig.show()
+
+    def plot_real_clines(self, n=10):
+        """
+        Take the avg A2 cline from allele arrs and plot it
+        """
+        n += 1
+        snaps = np.linspace(self.length - 1, 0, n).astype(np.int32)
+        if n in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[n]
+        else:
+            n_rows = 2
+            n_cols = (n + 1) // 2
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        x = util.get_bin_mids(self.allele_arrs[0].bin_size)
+        c1 = Constants.allele_colors[1]
+        c2 = Constants.allele_colors[3]
+        for i in np.arange(n):
+            t = snaps[i]
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            a2_freqs = []
+            b2_freqs = []
+            for arr in self.allele_arrs:
+                a2_freqs.append(arr.freq[t, :, 0, 1])
+                b2_freqs.append(arr.freq[t, :, 1, 1])
+            a2 = np.mean(a2_freqs, axis=0)
+            a2_std = np.std(a2_freqs, axis=0)
+            b2 = np.mean(b2_freqs, axis=0)
+            b2_std = np.std(b2_freqs, axis=0)
+            ax.plot(x, b2+b2_std, color=c2)
+            ax.plot(x, b2-b2_std, color=c2)
+            ax.plot(x, b2, marker="x", linewidth=2, color=c2)
+            ax.plot(x, a2+a2_std, color=c1)
+            ax.plot(x, a2-a2_std, color=c1)
+            ax.plot(x, a2, marker="x", linewidth=2, color=c1)
+            title = "t = " + str(t)
+            util.setup_space_plot(ax, 1.01, "allele frequency", title)
+        figure.show()
+
+    def plot_pop_density(self, n=10):
+        """
+        Plot mean population densities
+        """
+        n += 1
+        snaps = np.linspace(self.length - 1, 0, n).astype(np.int32)
+        if n in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[n]
+        else:
+            n_rows = 2
+            n_cols = (n + 1) // 2
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        bin_size = self.allele_arrs[0].bin_size
+        x = util.get_bin_mids(bin_size)
+        ymax = self.genotype_arrs[0].params.K * 1.35 * bin_size
+        for i in np.arange(n):
+            t = snaps[i]
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            densities = []
+            for arr in self.genotype_arrs:
+                densities.append(arr.densities[t])
+            mean = np.mean(densities, axis=0)
+            std = np.std(densities, axis=0)
+            ax.errorbar(x, mean, yerr=std, color="black")
+            title = "t = " + str(t) + " mean: " + str(np.round(np.sum(mean),1))
+            util.setup_space_plot(ax, ymax, "mean density", title)
+        figure.suptitle("Mean pop. density at time intervals")
+        if n < plot_shape[0] * plot_shape[1]:
+            # if there is a free plot, plot all-time mean pop
+            index = np.unravel_index(n, plot_shape)
+            ax = axs[index]
+            densities = []
+            for arr in self.genotype_arrs:
+                densities.append(arr.densities)
+                all_arr = np.mean(densities, axis=0)
+                mean = np.mean(all_arr, axis=0)
+                std = np.std(all_arr, axis=0)
+                ax.errorbar(x, mean, yerr=std, color="black")
+                title = "all-time mean: " + str(np.round(np.sum(mean), 1))
+                util.setup_space_plot(ax, ymax, "mean density", title)
+        figure.show()
+
+    def plot_histories(self, title=None):
+        """
+        Plot the subpop size histories of each array in the instance
+        """
+        n = len(self.genotype_arrs)
+        if n in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[n]
+        else:
+            n_rows = 2
+            n_cols = (n + 1) // 2
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        for i in np.arange(n):
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            self.genotype_arrs[i].get_history_subplot(ax)
+        figure.legend(["N", "Hyb"] + Constants.subpop_legend, fontsize=6,
+                      loc='right', borderaxespad=0.1, fancybox=False,
+                      framealpha=1, edgecolor="black")
+        if title:
+            figure.suptitle(title)
+        figure.show()
 
 
 class RaggedArr:
@@ -855,3 +1123,4 @@ class MatingHistograms:
             fig0.colorbar(p0)
         fig0.suptitle("Female fecundities")
         fig0.show()
+

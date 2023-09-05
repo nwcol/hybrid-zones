@@ -6,6 +6,6 @@ def main(params, name_stem, number):
         params.history_type = "genotype_arr"
         print("parameter history_type set to genotype_arr")
     trial = pedigrees.Trial(params)
-    filename = name_stem + "_arr_" + number
+    filename = name_stem + "_arr_" + number + ".txt"
     trial.genotype_arr.save_txt(filename)
     return 0
