@@ -50,7 +50,7 @@ class Params:
         self.female_fitness = False
         self.k_1 = -20
         self.k_2 = -self.k_1
-        self.mu = 0.2
+        self.mu = 0.0
         self.mid_1 = 0.5
         self.mid_2 = 0.5
 

@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+import time
+
 import os
 
 import scipy.optimize as opt
@@ -40,10 +42,14 @@ class GenotypeArr:
         return cls(arr, params, t_dim, bin_size)
 
     @classmethod
-    def from_generation(cls, generation_table, bin_size=0.01):
+    def from_generation(cls, generation_table, bin_size=0.01, exclusive=True):
         """
         Get a SubpopArr of time dimension 1, recording a single generation
+
+        :param exclusive: if True, exclude individuals killed by fitness
         """
+        if exclusive:
+            generation_table = generation_table.filter_deceased()
         bin_edges, n_bins = util.get_bins(bin_size)
         arr = np.zeros((1, n_bins, Constants.n_genotypes), dtype=np.int32)
         x = generation_table.cols.x
@@ -56,8 +62,9 @@ class GenotypeArr:
         return cls(arr, params, t, bin_size)
 
     @classmethod
-    def from_pedigree(cls, pedigree_table, bin_size=0.01):
-        """Get a SubpopArr recording population densities in a Pedigree of
+    def from_pedigree(cls, pedigree_table, bin_size=0.01, exclusive=True):
+        """
+        Get a GenotypeArr recording population densities in a Pedigree of
         time dimension pedigree.g + 1
         """
         t_dim = pedigree_table.g + 1
@@ -65,13 +72,15 @@ class GenotypeArr:
         arr = np.zeros((t_dim, n_bins, Constants.n_genotypes), dtype=np.int32)
         for t in np.arange(pedigree_table.g + 1):
             generation_table = pedigree_table.get_generation(t)
-            arr[t, :, :] = GenotypeArr.from_generation(generation_table).arr[0]
+            arr[t, :, :] = GenotypeArr.from_generation(generation_table,
+                bin_size=bin_size, exclusive=exclusive).arr[0]
         params = pedigree_table.params
         t = 0
         return cls(arr, params, t, bin_size)
 
     @classmethod
     def load_txt(cls, filename):
+        time0 = time.time()
         file = open(filename, 'r')
         string = file.readline()
         params = parameters.Params.from_string(string[1:])
@@ -85,6 +94,8 @@ class GenotypeArr:
         arr = np.reshape(raw_arr, new_shape)
         t_now = 0
         bin_size = 1 / n_bins
+        duration = time.time() - time0
+        print(f"load time: {np.round(duration, 3)} s")
         return cls(arr, params, t_now, bin_size)
 
     def __repr__(self):
@@ -119,10 +130,13 @@ class GenotypeArr:
         Return the generation or generations at the times or mask designated
         by index
         """
-        arr = self.arr[[index]]
+        if type(index) == int:
+            arr = self.arr[[index]]
+        else:
+            arr = self.arr[index]
         params = self.params
         bin_size = self.bin_size
-        return AlleleArr(arr, params, index, bin_size)
+        return GenotypeArr(arr, params, index, bin_size)
 
     def enter_generation(self, generation):
         t = generation.t
@@ -298,7 +312,7 @@ class GenotypeArr:
         figure.show()
         return figure
 
-    def plot_mean_density(self):
+    def plot_mean_density(self, ymax=None):
         geno_sums = np.sum(self.arr, axis=2)
         mean = np.mean(geno_sums, axis=0)
         std = np.std(geno_sums, axis=0)
@@ -306,9 +320,585 @@ class GenotypeArr:
         sub = fig.add_subplot()
         x = util.get_bin_mids(self.bin_size)
         sub.errorbar(x, mean, yerr=std, marker="x", color="black")
-        ymax = np.max(mean) * 1.2
+        if not ymax:
+            ymax = self.params * 1.25
         util.setup_space_plot(sub, ymax, "mean", "mean pop")
         fig.show()
+
+    def plot_density_over_time(self, n=11, ymax=None):
+        snaps = np.linspace(self.g - 1, 0, n).astype(np.int32)
+        if n in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[n]
+        else:
+            n_rows = 2
+            n_cols = (n + 1) // 2
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        bin_size = self.bin_size
+        x = util.get_bin_mids(bin_size)
+        if not ymax:
+            ymax = self.params.K * 1.35 * bin_size
+        for i in np.arange(n):
+            t = snaps[i]
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            densities = self.densities[t]
+            mean = np.mean(densities, axis=0)
+            std = np.std(densities, axis=0)
+            ax.errorbar(x, mean, yerr=std, color="black")
+            title = "t = " + str(t) + " mean: " + str(
+                np.round(np.sum(mean), 1))
+            util.setup_space_plot(ax, ymax, "mean density", title)
+        figure.suptitle("Mean pop. density at time intervals")
+        if n < plot_shape[0] * plot_shape[1]:
+            # if there is a free plot, plot all-time mean pop
+            index = np.unravel_index(n, plot_shape)
+            ax = axs[index]
+            mean = np.mean(self.densities, axis=0)
+            std = np.std(self.densities, axis=0)
+            ax.errorbar(x, mean, yerr=std, color="black")
+            title = "all-time mean: " + str(np.round(np.sum(mean), 1))
+            util.setup_space_plot(ax, ymax, "mean density", title)
+        figure.show()
+
+
+class GenotypeArrSummary:
+
+    def __init__(self, genotype_arr, snapshot_int=100):
+        time0 = time.time()
+        self.genotype_arr = genotype_arr
+        self.params = genotype_arr.params
+        self.length = len(genotype_arr.arr)
+        self.bin_size = genotype_arr.bin_size
+        self.snapshot_t = np.arange(0, self.length+snapshot_int-1,snapshot_int)
+        self.snapshot_int = snapshot_int
+        self.n_snapshots = len(self.snapshot_t)
+        self.sub_arr = genotype_arr[self.snapshot_t]
+        self.sub_arr.g = self.n_snapshots
+        self.allele_arr = AlleleArr.from_subpop_arr(self.sub_arr)
+        cline_pars = ClinePars.from_allele_arr(self.allele_arr)
+        self.x_vec = cline_pars.x_vec
+        self.k_vec = cline_pars.k_vec
+        # expressed in snapshots
+        self.fixation_t = self.allele_arr.detect_fixation()
+        if self.fixation_t["A1"]:
+            self.end_time = self.fixation_t["A1"]
+            self.fixed_allele = 0
+            self.fix_time = self.fixation_t["A1"]
+        elif self.fixation_t["A2"]:
+            self.end_time = self.fixation_t["A2"]
+            self.fixed_allele = 1
+            self.fix_time = self.fixation_t["A2"]
+        else:
+            self.end_time = 0
+            self.fixed_allele = -1
+            self.fix_time = None
+        duration = time.time() - time0
+        print(f"computation time: {np.round(duration, 3)} s")
+
+    @property
+    def var_x_through_time(self):
+        return np.var(self.x_vec[self.end_time:])
+
+    @property
+    def std_x_through_time(self):
+        return np.std(self.x_vec[self.end_time:])
+
+    @property
+    def mean_x_through_time(self):
+        return np.mean(self.x_vec[self.end_time:])
+
+    @property
+    def min_x(self):
+        return np.min(self.x_vec[self.end_time:])
+
+    @property
+    def max_x(self):
+        return np.max(self.x_vec[self.end_time:])
+
+    @property
+    def vel_x(self):
+        """
+        Get a vector of the velocity of the cline center at each snapshot,
+        normalized by dividing by the snapshot interval
+        """
+        steps = np.zeros(self.n_snapshots)
+        steps[:] = np.nan
+        for i in np.arange(self.end_time, self.n_snapshots - 1):
+            step = (self.x_vec[i] - self.x_vec[i + 1]) / self.snapshot_int
+            steps[i] = step
+        steps /= self.snapshot_int
+        return steps
+
+    @property
+    def speed_x(self):
+        return np.abs(self.vel_x)
+
+    @property
+    def mean_vel_x(self):
+        vel_x = self.vel_x
+        return np.mean(vel_x[self.end_time:])
+
+    @property
+    def mean_speed_x(self):
+        speed_x = self.speed_x
+        return np.mean(speed_x[self.end_time:])
+
+    @property
+    def slope_k(self):
+        steps = np.zeros(self.n_snapshots)
+        steps[:] = np.nan
+        for i in np.arange(self.end_time, self.n_snapshots - 1):
+            step = (self.k_vec[i] - self.k_vec[i + 1]) / self.snapshot_int
+            steps[i] = step
+        slope_k = np.mean(steps)
+        return slope_k
+
+
+class SummaryCollection:
+
+    """
+    Intended as a container for GenotypeArrSummary instances sharing the same
+    parameter set. summarizes them in some key statistics
+    """
+
+    def __init__(self, directory, snapshot_int=100):
+        #base_dir = os.getcwd().replace(r"\hybzones", "") + r"\hybzones"
+        #directory = base_dir + "\\data\\" + directory + "\\"
+        file_names = os.listdir(directory)
+        file_names = [directory + filename for filename in file_names]
+        self.summaries = []
+        for file_name in file_names:
+            genotype_arr = GenotypeArr.load_txt(file_name)
+            self.summaries.append(GenotypeArrSummary(genotype_arr,
+                                                     snapshot_int=snapshot_int))
+        self.snapshot_t = self.summaries[0].snapshot_t
+        self.n_snapshots = self.summaries[0].n_snapshots
+        self.params = self.summaries[0].params
+        self.bin_size = self.summaries[-1].bin_size
+        self.n = len(self.summaries)
+
+    def __getitem__(self, idx):
+        return self.summaries[idx]
+
+    @property
+    def fix_frac(self):
+        """
+        Return the fraction of trials where signal fixation occured
+        """
+        i = 0
+        for summary in self.summaries:
+            if summary.fix_time:
+                i += 1
+        return i / len(self.summaries)
+
+    @property
+    def mean_fix_time(self):
+        """
+        Return the mean time to fixation among trials where fixation occured
+        """
+        fix_times = []
+        for summary in self.summaries:
+            if summary.fix_time:
+                fix_times.append(summary.snapshot_t[int(summary.fix_time)])
+        return np.mean(fix_times)
+
+    @property
+    def fix_indices(self):
+        fix_indices = []
+        for summary in self.summaries:
+            if summary.fix_time:
+                fix_indices.append(int(summary.fix_time))
+        return fix_indices
+
+    def get_density_at_t(self, t):
+        """
+        Get a vector of mean densities across trials at a given time
+        """
+        densities = []
+        for summary in self.summaries:
+            densities.append(summary.genotype_arr.densities[t])
+        return np.mean(densities, axis=0)
+
+    def std_density_at_t(self, t):
+        """
+        Get a vector of mean densities across trials at a given time
+        """
+        densities = []
+        for summary in self.summaries:
+            densities.append(summary.genotype_arr.densities[t])
+        return np.std(densities, axis=0)
+
+    @property
+    def mean_density(self):
+        """
+        Return a vector of mean densities across trials and time
+        """
+        densities = []
+        for summary in self.summaries:
+            densities.append(np.mean(summary.genotype_arr.densities, axis=0))
+        return np.mean(densities, axis=0)
+
+    @property
+    def std_density(self):
+        """
+        Return a vector of mean densities across trials and time
+        """
+        densities = []
+        for summary in self.summaries:
+            densities.append(np.mean(summary.genotype_arr.densities, axis=0))
+        return np.std(densities, axis=0)
+
+    @property
+    def mean_cline_k(self):
+        mean_k = np.zeros(self.n_snapshots, dtype=np.float32)
+        mean_k[:] = np.nan
+        for t in np.arange(self.n_snapshots):
+            this_k = []
+            for summary in self.summaries:
+                if t >= summary.end_time:
+                    this_k.append(summary.k_vec[t])
+            if len(this_k) > 0:
+                mean_k[t] = np.mean(this_k)
+        return mean_k
+
+    @property
+    def min_cline_k(self):
+        min_k = np.zeros(self.n_snapshots, dtype=np.float32)
+        min_k[:] = np.nan
+        for t in np.arange(self.n_snapshots):
+            this_k = []
+            for summary in self.summaries:
+                if t >= summary.end_time:
+                    this_k.append(summary.k_vec[t])
+            if len(this_k) > 0:
+                min_k[t] = np.min(this_k)
+        return min_k
+
+    @property
+    def max_cline_k(self):
+        max_k = np.zeros(self.n_snapshots, dtype=np.float32)
+        max_k[:] = np.nan
+        for t in np.arange(self.n_snapshots):
+            this_k = []
+            for summary in self.summaries:
+                if t >= summary.end_time:
+                    this_k.append(summary.k_vec[t])
+            if len(this_k) > 0:
+                max_k[t] = np.max(this_k)
+        return max_k
+
+    @property
+    def std_cline_k(self):
+        std_k = np.zeros(self.n_snapshots, dtype=np.float32)
+        std_k[:] = np.nan
+        for t in np.arange(self.n_snapshots):
+            this_k = []
+            for summary in self.summaries:
+                if t >= summary.end_time:
+                    this_k.append(summary.k_vec[t])
+            if len(this_k) > 0:
+                std_k[t] = np.std(this_k)
+        return std_k
+
+    @property
+    def mean_cline_x(self):
+        mean_x = np.zeros(self.n_snapshots, dtype=np.float32)
+        mean_x[:] = np.nan
+        for t in np.arange(self.n_snapshots):
+            this_x = []
+            for summary in self.summaries:
+                if t >= summary.end_time:
+                    this_x.append(summary.x_vec[t])
+            if len(this_x) > 0:
+                mean_x[t] = np.mean(this_x)
+        return mean_x
+
+    @property
+    def std_cline_x(self):
+        std_x = np.zeros(self.n_snapshots, dtype=np.float32)
+        std_x[:] = np.nan
+        for t in np.arange(self.n_snapshots):
+            this_x = []
+            for summary in self.summaries:
+                if t >= summary.end_time:
+                    this_x.append(summary.x_vec[t])
+            if len(this_x) > 0:
+                std_x[t] = np.var(this_x)
+        return std_x
+
+    @property
+    def max_cline_x(self):
+        max_x = np.zeros(self.n_snapshots, dtype=np.float32)
+        max_x[:] = np.nan
+        for t in np.arange(self.n_snapshots):
+            this_x = []
+            for summary in self.summaries:
+                if t >= summary.end_time:
+                    this_x.append(summary.x_vec[t])
+            if len(this_x) > 0:
+                max_x[t] = np.max(this_x)
+        return max_x
+
+    @property
+    def min_cline_x(self):
+        min_x = np.zeros(self.n_snapshots, dtype=np.float32)
+        min_x[:] = np.nan
+        for t in np.arange(self.n_snapshots):
+            this_x = []
+            for summary in self.summaries:
+                if t >= summary.end_time:
+                    this_x.append(summary.x_vec[t])
+            if len(this_x) > 0:
+                min_x[t] = np.min(this_x)
+        return min_x
+
+    @property
+    def mean_cline_speed(self):
+        mean_speed = np.zeros(self.n_snapshots, dtype=np.float32)
+        mean_speed[:] = np.nan
+        for t in np.arange(self.n_snapshots):
+            speeds = []
+            for summary in self.summaries:
+                if t >= summary.end_time:
+                    speeds.append(summary.speed_x[t])
+            if len(speeds) > 0:
+                mean_speed[t] = np.mean(speeds)
+        return mean_speed
+
+    @property
+    def std_cline_speed(self):
+        std_speed = np.zeros(self.n_snapshots, dtype=np.float32)
+        std_speed[:] = np.nan
+        for t in np.arange(self.n_snapshots):
+            speeds = []
+            for summary in self.summaries:
+                if t >= summary.end_time:
+                    speeds.append(summary.speed_x[t])
+            if len(speeds) > 0:
+                std_speed[t] = np.std(speeds)
+        return std_speed
+
+
+class OverCollection:
+
+    """
+    Intended as a container for SummaryCollections; to be used in comparing
+    statistics trial groups using different parameter sets and plotting said
+    statistics
+    """
+
+    def __init__(self, directory, snapshot_int=100):
+        base_dir = os.getcwd().replace(r"\hybzones", "") + r"\hybzones"
+        full_dir_name = base_dir + "\\data\\" + directory + "\\"
+        short_dir_names = os.listdir(full_dir_name)
+        dir_names = [full_dir_name + dir_name + "\\" for dir_name in short_dir_names]
+        self.collections = []
+        self.names = short_dir_names
+        self.params = []
+        self.n = 0
+        for dir_name in dir_names:
+            self.collections.append(SummaryCollection(dir_name,
+                snapshot_int=snapshot_int))
+            self.params.append(self.collections[-1].params)
+            self.n += 1
+            print(f"collection #{self.n} loaded @{util.get_time_string()}")
+        self.snapshot_t = self.collections[-1].snapshot_t
+        self.n_snapshots = self.collections[-1].n_snapshots
+        self.bin_size = self.collections[-1].bin_size
+        self.colors = matplotlib.cm.gist_rainbow(np.linspace(0, 1, self.n))
+        self.length = self.snapshot_t[-1]
+
+    def __getitem__(self, i):
+        return self.collections[i]
+
+    def plot_cline_pars(self, title=None, simple=False, colls=None):
+        fig, axs = plt.subplots(2, 1, figsize=(6, 8), sharex='all')
+        x_ax, k_ax = axs[0], axs[1]
+        length = self.snapshot_t[-1]
+        times = self.snapshot_t
+        for i, collection in enumerate(self.collections):
+            if colls:
+                if i not in colls:
+                    continue
+            k = collection.mean_cline_k
+            if not simple:
+                k_std = collection.std_cline_k
+                k_min = collection.min_cline_k
+                k_max = collection.max_cline_k
+                k_ax.plot(times, k - k_std, color=self.colors[i], linewidth=1)
+                k_ax.plot(times, k + k_std, color=self.colors[i], linewidth=1)
+                k_ax.plot(times, k_max, color=self.colors[i], linewidth=1,
+                          linestyle="dotted")
+                k_ax.plot(times, k_min, color=self.colors[i], linewidth=1,
+                          linestyle="dotted")
+            k_ax.plot(times, k, color=self.colors[i], linewidth=2,
+                      label=self.names[i])
+            x = collection.mean_cline_x
+            if not simple:
+                x_std = collection.std_cline_x
+                x_min = collection.min_cline_x
+                x_max = collection.max_cline_x
+                x_ax.plot(times, x - x_std, color=self.colors[i], linewidth=1)
+                x_ax.plot(times, x + x_std, color=self.colors[i], linewidth=1)
+                x_ax.plot(times, x_max, color=self.colors[i], linewidth=1,
+                          linestyle="dotted")
+                x_ax.plot(times, x_min, color=self.colors[i], linewidth=1,
+                          linestyle="dotted")
+            x_ax.plot(times, x, color=self.colors[i], linewidth=2)
+        for i, collection in enumerate(self.collections):
+            if colls:
+                if i not in colls:
+                    continue
+            if len(collection.fix_indices) > 0:
+                idx = collection.fix_indices
+                t = self.snapshot_t[idx]
+                k_ax.scatter(t, collection.mean_cline_k[idx], marker="x",
+                             color=self.colors[i])
+                x_ax.scatter(t, collection.mean_cline_x[idx], marker="x",
+                             color=self.colors[i])
+        k_ax.set_ylim(0, 200)
+        x_ax.set_ylim(0, 1)
+        k_ax.set_xlim(0, length)
+        axs[1].set_xlabel("generations before present")
+        x_ax.set_ylabel("x_0")
+        k_ax.set_ylabel("k")
+        x_ax.set_title("cline parameter x_0")
+        k_ax.set_title("cline parameter k")
+        x_ax.invert_xaxis()
+        if not title:
+            title = ""
+        fig.suptitle("Cline Parameters " + str(title))
+        fig.tight_layout(pad=1.0)
+        fig.legend()
+        fig.show()
+
+    def plot_densities(self, snapshots=11, ymax=None, colls=None, title=None):
+        snaps = np.linspace(self.length, 0, snapshots).astype(np.int32)
+        if snapshots in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[snapshots]
+        else:
+            n_rows = 3
+            n_cols = (snapshots + 1) // 3
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        x = util.get_bin_mids(self.bin_size)
+        if not ymax:
+            ymax = self.params[0].K * 1.35 * self.bin_size
+        for i in np.arange(snapshots):
+            t = snaps[i]
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            for k, collection in enumerate(self.collections):
+                if colls:
+                    if k not in colls:
+                        continue
+                density = collection.get_density_at_t(t)
+                std = collection.std_density_at_t(t)
+                ax.plot(x, density, color=self.colors[k], linewidth=2)
+                ax.plot(x, density + std, color=self.colors[k], linewidth=1)
+                ax.plot(x, density - std, color=self.colors[k], linewidth=1)
+            title = "t = " + str(t)
+            util.setup_space_plot(ax, ymax, "mean density", title)
+        figure.suptitle("Mean pop. density at time intervals")
+        if snapshots < plot_shape[0] * plot_shape[1]:
+            # if there is a free plot, plot all-time mean densities
+            index = np.unravel_index(snapshots, plot_shape)
+            ax = axs[index]
+            for k, collection in enumerate(self.collections):
+                if colls:
+                    if k not in colls:
+                        continue
+                density = collection.mean_density
+                std = collection.std_density
+                ax.plot(x, density, color=self.colors[k], linewidth=2,
+                        label=self.names[k])
+                ax.plot(x, density + std, color=self.colors[k], linewidth=1)
+                ax.plot(x, density - std, color=self.colors[k], linewidth=1)
+            title = "all-time means"
+            util.setup_space_plot(ax, ymax, "mean density", title)
+        figure.legend()
+        if title:
+            figure.suptitle(title)
+        figure.show()
+
+    def plot_fixations(self, colls=None, title=None):
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        length = len(self.snapshot_t)
+        x_locs = np.arange(length)
+        times = self.snapshot_t
+        real_length = times[-1]
+        for i, collection in enumerate(self.collections):
+            if colls:
+                if i not in colls:
+                    continue
+            n = collection.n
+            values = np.zeros(length)
+            index = np.sort(collection.fix_indices)
+            for idx in index:
+                values[:idx] += 1
+            values /= n
+            plt.plot(times, values, color=self.colors[i], label=self.names[i])
+        for i, collection in enumerate(self.collections):
+            if colls:
+                if i not in colls:
+                    continue
+            if len(collection.fix_indices) > 0:
+                idx = collection.fix_indices
+                t = self.snapshot_t[idx]
+                sub.scatter(t, collection.mean_cline_k[idx], marker="x",
+                             color=self.colors[i])
+        sub.set_ylim(-0.01, 1.01)
+        sub.set_xlim(0, real_length)
+        sub.set_xlabel("generations before present")
+        sub.set_ylabel("% signal fixation")
+        sub.invert_xaxis()
+        fig.legend()
+        if title:
+            fig.title(title)
+        fig.show()
+
+    def plot_cline_speed(self, colls=None, title=None):
+        fig = plt.figure(figsize=(8, 6))
+        sub = fig.add_subplot(111)
+        length = len(self.snapshot_t)
+        times = self.snapshot_t
+        real_length = times[-1]
+        for i, collection in enumerate(self.collections):
+            if colls:
+                if i not in colls:
+                    continue
+            mean = collection.mean_cline_speed
+            std = collection.std_cline_speed
+            sub.plot(times, mean, color=self.colors[i], linewidth=2)
+            sub.plot(times, mean + std, color=self.colors[i], linewidth=1)
+            sub.plot(times, mean - std, color=self.colors[i], linewidth=1)
+        for i, collection in enumerate(self.collections):
+            if colls:
+                if i not in colls:
+                    continue
+            if len(collection.fix_indices) > 0:
+                idx = collection.fix_indices
+                t = times[idx]
+                sub.scatter(t, collection.mean_cline_speed[idx], marker="x",
+                            color=self.colors[i])
+        sub.set_xlim(0, real_length)
+        sub.set_xlabel("generations before present")
+        sub.set_ylabel("cline speed per generation")
+        sub.invert_xaxis()
+        fig.legend()
+        if title:
+            fig.title(title)
+        fig.show()
+
+    
 
 
 class AlleleArr:
@@ -317,6 +907,11 @@ class AlleleArr:
     space_axis = 1
     locus_axis = 2
     allele_axis = 3
+
+    """
+    [[A1, A2],
+     [B1, B2]], 
+    """
 
     def __init__(self, arr, params, t, bin_size):
         self.arr = arr
@@ -533,6 +1128,22 @@ class AlleleArr:
         figure.show()
         return figure
 
+    def detect_fixation(self):
+        """
+        Retrieve a dictionary of allele fixation times. If an allele is not
+        fixed, its key is left as None
+        """
+        fixations = {"A1": None, "A2": None, "B1": None, "B2": None}
+        coords = {"A1": (0, 0), "A2": (0, 1), "B1": (1, 0), "B2": (1, 1)}
+        length = len(self.arr)
+        freq = self.generation_freq
+        for allele in fixations:
+            i, j = coords[allele]
+            fix_time = length - np.searchsorted(np.flip(freq[:, i, j]), 1)
+            if fix_time < length:
+                fixations[allele] = fix_time
+        return fixations
+
 
 class ClinePars:
 
@@ -560,7 +1171,7 @@ class ClinePars:
         a2_freq = allele_freq[:, :, 0, 1]
         x = util.get_bin_mids(allele_arr.bin_size)
         params = allele_arr.params
-        t_dim = params.g + 1
+        t_dim = len(allele_arr.arr)
         x_vec = np.zeros(t_dim)
         k_vec = np.zeros(t_dim)
         for t in np.arange(t_dim):
@@ -629,18 +1240,24 @@ class GenotypeArrCollection:
     that all genotype arrays will share an identical params instance ....
     """
 
-    def __init__(self, genotype_arrs):
-        self.genotype_arrs = []
-        for arr in genotype_arrs:
-            self.genotype_arrs.append(arr)
+    def __init__(self, genotype_arrs, snapshot_int=100):
+        self.genotype_arrs = genotype_arrs
         self.params = self.genotype_arrs[0].params
-        self.allele_arrs = self.get_allele_arrs()
-        self.cline_pars = self.get_cline_pars()
         self.length = len(genotype_arrs[0].arr)
         self.bin_size = self.genotype_arrs[0].bin_size
+        self.snapshot_t = np.arange(0, self.length+snapshot_int-1,snapshot_int)
+        self.n_snapshots = len(self.snapshot_t)
+        self.sub_arrs = []
+        for arr in self.genotype_arrs:
+            sub_arr = arr[self.snapshot_t]
+            sub_arr.g = self.n_snapshots
+            self.sub_arrs.append(sub_arr)
+        self.allele_arrs = self.get_allele_arrs()
+        self.cline_pars = self.get_cline_pars()
+        self.n_trials = len(genotype_arrs)
 
     @classmethod
-    def load_directory(cls, directory):
+    def load_directory(cls, directory, snapshot_int=100):
         base_dir = os.getcwd().replace(r"\hybzones", "") + r"\hybzones"
         directory = base_dir + "\\data\\" + directory + "\\"
         file_names = os.listdir(directory)
@@ -648,7 +1265,7 @@ class GenotypeArrCollection:
         genotype_arrs = []
         for file_name in file_names:
             genotype_arrs.append(GenotypeArr.load_txt(file_name))
-        return cls(genotype_arrs)
+        return cls(genotype_arrs, snapshot_int=snapshot_int)
 
     def check_params(self):
         pass
@@ -662,47 +1279,77 @@ class GenotypeArrCollection:
 
     def get_cline_pars(self):
         cline_pars = []
-        for arr in self.genotype_arrs:
+        for arr in self.sub_arrs:
             cline_pars.append(ClinePars.from_genotype_arr(arr))
         return cline_pars
 
     def get_allele_arrs(self):
         allele_arrs = []
-        for arr in self.genotype_arrs:
+        for arr in self.sub_arrs:
             allele_arrs.append(AlleleArr.from_subpop_arr(arr))
         return allele_arrs
 
-    def plot_cline_pars(self):
+    def plot_cline_pars(self, title=None):
         n = len(self.cline_pars)
         bin_size = self.cline_pars[0].bin_size
         params = self.params
-        length = len(self.cline_pars[0].x_vec)
+        length = self.n_snapshots
         x_arr = np.zeros((length, n))
         k_arr = np.zeros((length, n))
         for i, pars in enumerate(self.cline_pars):
             x_arr[:, i] = pars.x_vec
             k_arr[:, i] = pars.k_vec
-        mean_x = np.mean(x_arr, axis=1)
-        std_x = np.std(x_arr, axis=1)
-        mean_k = np.mean(k_arr, axis=1)
-        std_k = np.std(k_arr, axis=1)
+        mean_x = np.zeros(length)
+        std_x = np.zeros(length)
+        mean_k = np.zeros(length)
+        std_k = np.zeros(length)
+        for i in np.arange(length):
+            mean_x[i] = np.mean(x_arr[i, x_arr[i, :] > 0])
+            std_x[i] = np.std(x_arr[i, x_arr[i, :] > 0])
+            mean_k[i] = np.mean(k_arr[i, k_arr[i, :] > 0.5])
+            std_k[i] = np.std(k_arr[i, k_arr[i, :] > 0.5])
         #
-        t = np.arange(length)
         fig, axs = plt.subplots(2, 1, figsize=(6, 8), sharex='all')
         x_ax, k_ax = axs[0], axs[1]
-        k_ax.errorbar(t, mean_k, yerr=std_k, color="black", linewidth=2)
-        x_ax.plot(t, np.full(length, 0.5), color="red", linestyle="dashed")
-        x_ax.errorbar(t, mean_x, yerr=std_x, color="black", linewidth=2)
+        k_ax.plot(self.snapshot_t, mean_k-std_k, color="black", linewidth=1)
+        k_ax.plot(self.snapshot_t, mean_k+std_k, color="black", linewidth=1)
+        k_ax.plot(self.snapshot_t, mean_k, color="black", linewidth=2)
+        x_ax.plot(self.snapshot_t, np.full(length, 0.5), color="red",
+                  linestyle="dashed")
+        x_ax.errorbar(self.snapshot_t, mean_x-std_x, color="black", linewidth=1)
+        x_ax.errorbar(self.snapshot_t, mean_x+std_x, color="black", linewidth=1)
+        x_ax.errorbar(self.snapshot_t, mean_x, color="black", linewidth=2)
+        #
+        fixations = []
+        for arr in self.allele_arrs:
+            fixations.append(arr.detect_fixation())
+        for fixes in fixations:
+            if fixes["A1"] or fixes["A2"]:
+                if fixes["A1"]:
+                    a = "A1"
+                    i = 0
+                elif fixes["A2"]:
+                    a = "A2"
+                    i = 1
+                idx = fixes[a]
+                t = self.snapshot_t[idx]
+                k_ax.scatter(t, mean_k[idx]+std_k[idx]+5, marker="x",
+                             color=Constants.allele_colors[i])
+                x_ax.scatter(t, mean_x[idx]+std_x[idx]+0.02, marker="x",
+                             color=Constants.allele_colors[i])
+        #
         k_ax.set_ylim(0, 200)
         x_ax.set_ylim(0, 1)
-        k_ax.set_xlim(0, length)
+        k_ax.set_xlim(0, self.length)
         axs[1].set_xlabel("generations before present")
         x_ax.set_ylabel("x_0")
         k_ax.set_ylabel("k")
         x_ax.set_title("cline parameter x_0")
         k_ax.set_title("cline parameter k")
         x_ax.invert_xaxis()
-        fig.suptitle("Cline Parameters")
+        if not title:
+            title = ""
+        fig.suptitle("Cline Parameters " + str(title))
         fig.tight_layout(pad=1.0)
         fig.show()
 
@@ -735,7 +1382,7 @@ class GenotypeArrCollection:
         sub.legend(snaps)
         fig.show()
 
-    def plot_real_clines(self, n=10):
+    def plot_cline_means(self, n=10):
         """
         Take the avg A2 cline from allele arrs and plot it
         """
@@ -756,13 +1403,14 @@ class GenotypeArrCollection:
         c2 = Constants.allele_colors[3]
         for i in np.arange(n):
             t = snaps[i]
+            j = np.searchsorted(self.snapshot_t, t)
             index = np.unravel_index(i, plot_shape)
             ax = axs[index]
             a2_freqs = []
             b2_freqs = []
             for arr in self.allele_arrs:
-                a2_freqs.append(arr.freq[t, :, 0, 1])
-                b2_freqs.append(arr.freq[t, :, 1, 1])
+                a2_freqs.append(arr.freq[j, :, 0, 1])
+                b2_freqs.append(arr.freq[j, :, 1, 1])
             a2 = np.mean(a2_freqs, axis=0)
             a2_std = np.std(a2_freqs, axis=0)
             b2 = np.mean(b2_freqs, axis=0)
@@ -773,6 +1421,34 @@ class GenotypeArrCollection:
             ax.plot(x, a2+a2_std, color=c1)
             ax.plot(x, a2-a2_std, color=c1)
             ax.plot(x, a2, marker="x", linewidth=2, color=c1)
+            title = "t = " + str(t)
+            util.setup_space_plot(ax, 1.01, "allele frequency", title)
+        figure.show()
+
+    def plot_all_clines(self, n=10):
+        n += 1
+        snaps = np.linspace(self.length - 1, 0, n).astype(np.int32)
+        if n in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[n]
+        else:
+            n_rows = 2
+            n_cols = (n + 1) // 2
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        x = util.get_bin_mids(self.allele_arrs[0].bin_size)
+        c1 = Constants.allele_colors[1]
+        c2 = Constants.allele_colors[3]
+        colors = matplotlib.cm.hsv(np.linspace(0, 1, self.n_trials))
+        for i in np.arange(n):
+            t = snaps[i]
+            j = np.searchsorted(self.snapshot_t, t)
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            for k, arr in enumerate(self.allele_arrs):
+                ax.plot(x, arr.freq[j, :, 0, 1], linewidth=2, color=colors[k])
             title = "t = " + str(t)
             util.setup_space_plot(ax, 1.01, "allele frequency", title)
         figure.show()
@@ -816,12 +1492,12 @@ class GenotypeArrCollection:
             densities = []
             for arr in self.genotype_arrs:
                 densities.append(arr.densities)
-                all_arr = np.mean(densities, axis=0)
-                mean = np.mean(all_arr, axis=0)
-                std = np.std(all_arr, axis=0)
-                ax.errorbar(x, mean, yerr=std, color="black")
-                title = "all-time mean: " + str(np.round(np.sum(mean), 1))
-                util.setup_space_plot(ax, ymax, "mean density", title)
+            all_arr = np.mean(densities, axis=0)
+            mean = np.mean(all_arr, axis=0)
+            std = np.std(all_arr, axis=0)
+            ax.errorbar(x, mean, yerr=std, color="black")
+            title = "all-time mean: " + str(np.round(np.sum(mean), 1))
+            util.setup_space_plot(ax, ymax, "mean density", title)
         figure.show()
 
     def plot_histories(self, title=None):
@@ -843,12 +1519,42 @@ class GenotypeArrCollection:
             index = np.unravel_index(i, plot_shape)
             ax = axs[index]
             self.genotype_arrs[i].get_history_subplot(ax)
-        figure.legend(["N", "Hyb"] + Constants.subpop_legend, fontsize=6,
-                      loc='right', borderaxespad=0.1, fancybox=False,
+        figure.legend(["N"] + Constants.subpop_legend, fontsize=6,
+                      loc='right', borderaxespad=0.005, fancybox=False,
                       framealpha=1, edgecolor="black")
         if title:
             figure.suptitle(title)
         figure.show()
+
+
+class GenotypeArrRange:
+    """
+    Class for anaalyzing large groups of genotype arrs sorted into lists
+    by parameter set.
+
+    """
+
+    def __init__(self, root_dir, snapshot_int=500):
+        """
+        Load every
+        """
+        self.collections = self.load_directory(root_dir, snapshot_int)
+        self.param_list = [coll.params for coll in self.collections]
+        lengths = list(set([coll.length for coll in self.collections]))
+        if len(lengths) == 1:
+            self.length = lengths[0]
+
+    @staticmethod
+    def load_directory(root_dir, snapshot_int):
+        base_dir = os.getcwd().replace(r"\hybzones", "") + r"\hybzones"
+        full_dir_name = base_dir + "\\data\\" + root_dir + "\\"
+        dir_names = os.listdir(full_dir_name)
+        dir_names = [full_dir_name + x for x in dir_names if ".txt" not in x]
+        collections = []
+        for dir_name in dir_names:
+            collections.append(GenotypeArrCollection.load_directory(
+                dir_name, snapshot_int=snapshot_int))
+        return collections
 
 
 class RaggedArr:
@@ -1123,4 +1829,19 @@ class MatingHistograms:
             fig0.colorbar(p0)
         fig0.suptitle("Female fecundities")
         fig0.show()
+
+col = OverCollection("fitness2")
+#example = GenotypeArr.load_txt("c:/hybzones/data/fitness/group4/fitness_group4_arr_13756400_4.txt")
+#group1 = GenotypeArrCollection.load_directory(r"fitness/group1")
+#group2 = SummaryCollection(r"fitness1\\group2")
+#group3 = GenotypeArrCollection.load_directory(r"fitness/group3")
+#group4 = GenotypeArrCollection.load_directory(r"fitness/group4")
+#group5 = GenotypeArrCollection.load_directory(r"fitness/group5")
+#group6 = GenotypeArrCollection.load_directory(r"fitness/group6")
+#group7 = GenotypeArrCollection.load_directory(r"fitness/group7")
+#group8 = GenotypeArrCollection.load_directory(r"fitness/group8")
+#group9 = GenotypeArrCollection.load_directory(r"fitness/group9")
+
+
+#why do trials with only 1 extant group have std with magnitude?
 

@@ -490,6 +490,33 @@ class Columns:
             index = np.intersect1d(index, new)
         return index
 
+    def get_subpop_union_index(self, **kwargs):
+        """
+        Return the index of organisms with any character defined in **kwargs
+        using the format column=character.
+
+        Eg return the ids of the union rather than the intersection of
+        subpopulations
+
+        example
+        >>>Columns.get_subpop_index(sex=0)
+        array([0, 1, 3, ... , 9878, 9879], dtype=np.int64)
+
+        :param kwargs:
+        :return:
+        """
+        index = np.arange(len(self))
+        for arg in kwargs:
+            if arg == 'x':
+                if kwargs[arg][1] < kwargs[arg][0]:
+                    raise ValueError("left bound exceeds right bound!")
+                new = self.get_range_index(kwargs[arg])
+            else:
+                new = np.nonzero(getattr(self, arg) == kwargs[arg])[0]
+            index = np.concatenate(index, new)
+        index = np.unique(index)
+        return index
+
     def get_subpop_mask(self, **kwargs):
         """
         Return a mask of organisms with the characters defined in **kwargs
@@ -896,6 +923,16 @@ class GenerationTable(Table):
         fig = gen_arr.plot_density()
         return fig
 
+    def filter_deceased(self):
+        """
+        Return an instance holding only individuals with flags 0 and 1
+        """
+        index = np.where(self.cols.flag > -1)[0]
+        cols = self.cols[index]
+        params = self.params
+        t = self.t
+        return GenerationTable(cols, params, t)
+
 
 class PedigreeTable(Table):
 
@@ -1232,9 +1269,10 @@ class Trial:
 
 # debug
 if __name__ == "__main__":
-    _params = parameters.Params(10_000, 400, 0.1)
+    _params = parameters.Params(10_000, 50, 0.1)
     _params.dispersal_model = "scale"
     _params.extrinsic_fitness = True
+    _params.mu = 0.3
     _trial = Trial(_params, n_snaps=10)
     _cols = _trial.pedigree_table.cols
     gen = _trial.pedigree_table.get_generation(0)
