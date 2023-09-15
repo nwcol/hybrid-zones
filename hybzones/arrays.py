@@ -33,6 +33,7 @@ class GenotypeArr:
         self.t = t
         self.g = params.g
         self.bin_size = bin_size
+        self.densities = np.sum(self.arr, axis=2)
 
     @classmethod
     def initialize(cls, params, bin_size=0.01):
@@ -80,7 +81,6 @@ class GenotypeArr:
 
     @classmethod
     def load_txt(cls, filename):
-        time0 = time.time()
         file = open(filename, 'r')
         string = file.readline()
         params = parameters.Params.from_string(string[1:])
@@ -94,8 +94,6 @@ class GenotypeArr:
         arr = np.reshape(raw_arr, new_shape)
         t_now = 0
         bin_size = 1 / n_bins
-        duration = time.time() - time0
-        print(f"load time: {np.round(duration, 3)} s")
         return cls(arr, params, t_now, bin_size)
 
     def __repr__(self):
@@ -155,13 +153,6 @@ class GenotypeArr:
         Return a vector of population sizes for each recorded generation
         """
         return np.sum(np.sum(self.arr, axis=1), axis=1)
-
-    @property
-    def densities(self):
-        """
-        Return the total population densities in each generation
-        """
-        return np.sum(self.arr, axis=2)
 
     def save_txt(self, filename):
         """
@@ -368,7 +359,6 @@ class GenotypeArr:
 class GenotypeArrSummary:
 
     def __init__(self, genotype_arr, snapshot_int=100):
-        time0 = time.time()
         self.genotype_arr = genotype_arr
         self.params = genotype_arr.params
         self.length = len(genotype_arr.arr)
@@ -396,8 +386,6 @@ class GenotypeArrSummary:
             self.end_time = 0
             self.fixed_allele = -1
             self.fix_time = None
-        duration = time.time() - time0
-        print(f"computation time: {np.round(duration, 3)} s")
 
     @property
     def var_x_through_time(self):
@@ -776,7 +764,8 @@ class OverCollection:
         fig.legend()
         fig.show()
 
-    def plot_densities(self, snapshots=11, ymax=None, colls=None, title=None):
+    def plot_densities(self, snapshots=11, ymax=None, colls=None, title=None,
+                       simple=True):
         snaps = np.linspace(self.length, 0, snapshots).astype(np.int32)
         if snapshots in Constants.shape_dict:
             n_rows, n_cols = Constants.shape_dict[snapshots]
@@ -800,10 +789,11 @@ class OverCollection:
                     if k not in colls:
                         continue
                 density = collection.get_density_at_t(t)
-                std = collection.std_density_at_t(t)
                 ax.plot(x, density, color=self.colors[k], linewidth=2)
-                ax.plot(x, density + std, color=self.colors[k], linewidth=1)
-                ax.plot(x, density - std, color=self.colors[k], linewidth=1)
+                if not simple:
+                    std = collection.std_density_at_t(t)
+                    ax.plot(x, density + std, color=self.colors[k], linewidth=1)
+                    ax.plot(x, density - std, color=self.colors[k], linewidth=1)
             title = "t = " + str(t)
             util.setup_space_plot(ax, ymax, "mean density", title)
         figure.suptitle("Mean pop. density at time intervals")
@@ -816,11 +806,12 @@ class OverCollection:
                     if k not in colls:
                         continue
                 density = collection.mean_density
-                std = collection.std_density
                 ax.plot(x, density, color=self.colors[k], linewidth=2,
                         label=self.names[k])
-                ax.plot(x, density + std, color=self.colors[k], linewidth=1)
-                ax.plot(x, density - std, color=self.colors[k], linewidth=1)
+                if not simple:
+                    std = collection.std_density
+                    ax.plot(x, density + std, color=self.colors[k], linewidth=1)
+                    ax.plot(x, density - std, color=self.colors[k], linewidth=1)
             title = "all-time means"
             util.setup_space_plot(ax, ymax, "mean density", title)
         figure.legend()
@@ -877,9 +868,10 @@ class OverCollection:
                     continue
             mean = collection.mean_cline_speed
             std = collection.std_cline_speed
-            sub.plot(times, mean, color=self.colors[i], linewidth=2)
-            sub.plot(times, mean + std, color=self.colors[i], linewidth=1)
-            sub.plot(times, mean - std, color=self.colors[i], linewidth=1)
+            sub.plot(times, mean, color=self.colors[i], linewidth=2,
+                     label=self.names[i])
+            #sub.plot(times, mean + std, color=self.colors[i], linewidth=1)
+            #sub.plot(times, mean - std, color=self.colors[i], linewidth=1)
         for i, collection in enumerate(self.collections):
             if colls:
                 if i not in colls:
@@ -1830,7 +1822,9 @@ class MatingHistograms:
         fig0.suptitle("Female fecundities")
         fig0.show()
 
-col = OverCollection("fitness2")
+#col = OverCollection("fitness2")
+
+
 #example = GenotypeArr.load_txt("c:/hybzones/data/fitness/group4/fitness_group4_arr_13756400_4.txt")
 #group1 = GenotypeArrCollection.load_directory(r"fitness/group1")
 #group2 = SummaryCollection(r"fitness1\\group2")

@@ -43,7 +43,7 @@ def scale_dispersal(generation_table):
     delta = np.zeros(n, dtype=np.float32)
     delta[female_index] = np.random.normal(loc=0.0, scale=params.delta,
                                            size=len(female_index))
-    limits = [-params.bound, params.bound]
+    limits = [-params.mating_bound, params.mating_bound]
     signal_prop, ah_index = get_signal_props(generation_table, limits)
     scale = scale_func(signal_prop, params)
     scale[ah_index] = params.delta
@@ -84,9 +84,9 @@ def shift_dispersal(generation_table):
     delta = np.zeros(n, dtype=np.float32)
     delta[female_index] = np.random.normal(loc=0.0, scale=params.delta,
                                            size=len(female_index))
-    left = [-params.bound, 0]
+    left = [-params.mating_bound, 0]
     left_props, hyb_index = get_signal_props(generation_table, left)
-    right = [0, params.bound]
+    right = [0, params.mating_bound]
     right_props, hyb_index = get_signal_props(generation_table, right)
     loc = loc_func(left_props, right_props, params)
     loc[hyb_index] = 0
@@ -104,7 +104,7 @@ def loc_func(left_props, right_props, params):
     :param params:
     :return: vector of standard deviations
     """
-    return (left_props - right_props) * (params.shift_factor * params.delta)
+    return (right_props - left_props) * (params.shift_factor * params.delta)
 
 
 def get_signal_props(generation_table, limits):
@@ -216,8 +216,8 @@ def ring_edge(generation_table, delta):
 
 
 dispersal_models = {"random": random_dispersal,
-                    "scale" : scale_dispersal,
-                    "shift" : shift_dispersal}
+                    "scale": scale_dispersal,
+                    "shift": shift_dispersal}
 
 edge_models = {"closed": closed_edge,
                "flux": flux_edge,

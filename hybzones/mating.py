@@ -97,7 +97,7 @@ class Matings:
         self.n_ = np.sum(self.n_offspring)
         self.n = None
         self.mating_bounds = Bounds(living_table, 0, 1, limits=[
-            -self.params.bound, self.params.bound])
+            -self.params.mating_bound, self.params.mating_bound])
         rel_mat_ids, rel_pat_ids = self.run(living_table)
         # to relative id in the living table
         mat_ids = self.id_map.female_to_rel(rel_mat_ids)

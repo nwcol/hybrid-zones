@@ -11,14 +11,28 @@ import os
 from hybzones import util
 
 
-if __name__ == "__main__":
-    plt.rcParams['figure.dpi'] = 100
-    matplotlib.use('Qt5Agg')
-
-
 class Params:
+    """
+    A class defining simulation parameters. Almost all parameters have default
+    values, so non-default parameters must be explicitly declared after
+    instantiation.
+
+    Documentation at https://docs.google.com/document/d/16BmLuji9_FA6kHPHW1C6G7iGMdRR0JPiug14B4aTG8s/edit?usp=sharing
+    """
 
     def __init__(self, N, g, c):
+        """
+        :param N: initial population size. by default, determines K and
+            initial subpopulation sizes
+        :type N: int
+        :param g: number of generations to simulate. simulation begins at
+            generation g and proceeds forward in time to generation 0
+        :type g: int
+        :param c: maximum strength of assortative mating; a ratio of the
+            relative probability of mating between an opposite homozygote
+            signal and preference
+        :type c: float
+        """
 
         # population parameters
         self.N = N
@@ -32,7 +46,7 @@ class Params:
         self.c = c
         self.pref_model = "undesirable"
         self.beta = 0.005
-        self.bound = self.beta * 4
+        self.mating_bound = 0.02
         self.density_bound = 0.005
         self.mating_model = "gaussian"
 
@@ -49,7 +63,7 @@ class Params:
         self.extrinsic_fitness = False
         self.female_fitness = False
         self.k_1 = -20
-        self.k_2 = -self.k_1
+        self.k_2 = 20
         self.mu = 0.0
         self.mid_1 = 0.5
         self.mid_2 = 0.5
@@ -308,3 +322,9 @@ c_matrix_methods = {"null" : get_null_c_matrix,
                     "undesirable" : get_undesirable_c_matrix,
                     "semi_undesirable": get_semi_undesirable_c_matrix,
                     "distinct" : get_distinct_c_matrix}
+
+
+if __name__ == "__main__":
+    plt.rcParams['figure.dpi'] = 100
+    matplotlib.use('Qt5Agg')
+

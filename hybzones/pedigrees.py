@@ -770,7 +770,7 @@ class GenerationTable(Table):
         """
         create the founding generation
         """
-        n = params.N
+        n = np.sum(params.subpop_n)
         id = np.full(n, 0, dtype=np.int32)
         time = np.full(n, params.g, dtype=np.int32)
         maternal_id = np.full(n, -1, dtype=np.int32)
@@ -1270,9 +1270,8 @@ class Trial:
 # debug
 if __name__ == "__main__":
     _params = parameters.Params(10_000, 50, 0.1)
-    _params.dispersal_model = "scale"
-    _params.extrinsic_fitness = True
-    _params.mu = 0.3
+    _params.dispersal_model = "shift"
+    _params.shift_factor = 40
     _trial = Trial(_params, n_snaps=10)
     _cols = _trial.pedigree_table.cols
     gen = _trial.pedigree_table.get_generation(0)
