@@ -154,7 +154,7 @@ class Matings:
         signals = generation_table.cols.signal[self.id_map.male_index]
         n = len(self.id_map.male_index)
         pref_matrix = np.full((n, 3), 1, dtype=np.float32)
-        c_matrix = self.params.get_c_matrix()
+        c_matrix = self.params.c_matrix
         for i in [0, 1, 2]:
             pref_matrix[:, i] = c_matrix[signals, i]
         return pref_matrix

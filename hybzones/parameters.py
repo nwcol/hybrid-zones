@@ -20,94 +20,97 @@ class Params:
     Documentation at https://docs.google.com/document/d/16BmLuji9_FA6kHPHW1C6G7iGMdRR0JPiug14B4aTG8s/edit?usp=sharing
     """
 
-    def __init__(self, N, g, c):
+    def __init__(self, g, **kwargs):
         """
-        :param N: initial population size. by default, determines K and
-            initial subpopulation sizes
-        :type N: int
-        :param g: number of generations to simulate. simulation begins at
+        :param g: number of generations to simulate; simulation begins at
             generation g and proceeds forward in time to generation 0
         :type g: int
-        :param c: maximum strength of assortative mating; a ratio of the
-            relative probability of mating between an opposite homozygote
-            signal and preference
-        :type c: float
         """
-
-        # population parameters
-        self.N = N
-        self.subpop_n = [N//2, 0, 0, 0, 0, 0, 0, 0, N//2]
+        self.g = g
+        self.subpop_n = [5_000, 0, 0, 0, 0, 0, 0, 0, 5_000]
         self.subpop_lims = [[0, 0.5], [], [], [], [], [], [], [], [0.5, 1]]
-        self.K = N
+        self.K = 10_000
         self.r = 0.5
         self.g = g
-
         # mating parameters
-        self.c = c
+        self.c = 0.1
         self.pref_model = "undesirable"
         self.beta = 0.005
         self.mating_bound = 0.02
         self.density_bound = 0.005
         self.mating_model = "gaussian"
-
         # dispersal parameters
         self.delta = 0.01
         self.dispersal_model = "random"
         self.edge_model = "closed"
-        self.scale_factor = 2  # max scale effect
-        self.shift_factor = 2  # max shift effect
-
+        self.scale_factor = 2
+        self.shift_factor = 2
         # fitness parameters
         self.intrinsic_fitness = False
-        self.hyb_fitness = 1
+        self.hyb_fitness = 1.0
         self.extrinsic_fitness = False
         self.female_fitness = False
+        self.mu = 0.0
         self.k_1 = -20
         self.k_2 = 20
-        self.mu = 0.0
         self.mid_1 = 0.5
         self.mid_2 = 0.5
-
         # scripting
         self.history_type = "pedigree_table"
-        self.task = "get_multi_window"
-
-        # genetics parameters
-        self.sample_sizes = [50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
-        self.sample_bins = [[0.0, 0.1], [0.1, 0.2], [0.2, 0.3], [0.3, 0.4],
-                            [0.4, 0.5], [0.5, 0.6], [0.6, 0.7], [0.7, 0.8],
-                            [0.8, 0.9], [0.9, 1.0]]
+        self.task = None
+        # genetic parameters
+        self.sample_bins = None
+        self.sample_sizes = None
         self.time_cutoffs = [None, None]
         self.n_windows = 10
-        self.mig_rate = 1e-4
         self.seq_length = 1e4
         self.recombination_rate = 1e-8
         self.u = 1e-8
         self.demographic_model = "one_pop"
+        self.mig_rate = None
         self.rooted = True
+        self_dict = self.as_dict
+        for key in kwargs:
+            if key in self_dict:
+                setattr(self, key, kwargs[key])
+            else:
+                raise AttributeError(f"{key} is not a valid parameter field")
 
     @classmethod
-    def load(cls, filename, param_dir=None):
+    def load(cls, filename, path=None):
         """
-        Load a dictionary representation of a params class instance from a
-        .json file, initialize a new instance and fill its fields with the
-        values from the file
+        Instantiate a Params instance from a .json params file
+
+        :param filename: filename in the directory specificed by path, or if
+            path is not specified, in the hybzones/parameters directory
+        :param path: if specified, load filename from this path
         """
-        if not param_dir:
-            base_dir = os.getcwd().replace(r"\hybzones", "") + r"\hybzones"
-            param_dir = base_dir + "\\parameters\\"
-        filename = param_dir + filename
+        if not path:
+            root = os.getcwd()
+            path = root.replace("hybzones\\hybzones", "hybzones\\parameters\\")
+        filename = path + filename
         file = open(filename, 'r')
         param_dict = json.load(file)
         file.close()
-        params = cls(param_dict["K"], param_dict["g"], param_dict["c"])
+        params = cls(0)
         for param in param_dict:
             setattr(params, param, param_dict[param])
         return params
 
+    def declare_genetic_params(self):
+        self.sample_sizes = [50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
+        self.sample_bins = [[0.0, 0.1], [0.1, 0.2], [0.2, 0.3], [0.3, 0.4],
+                            [0.4, 0.5], [0.5, 0.6], [0.6, 0.7], [0.7, 0.8],
+                            [0.8, 0.9], [0.9, 1.0]]
+
     @classmethod
     def from_dict(cls, param_dict):
-        params = cls(param_dict["K"], param_dict["g"], param_dict["c"])
+        """
+        Instantiate a Params instance from a dictionary of parameters
+
+        :param param_dict: dictionary of parameters
+        """
+        params = cls(0)
         for field in param_dict:
             setattr(params, field, param_dict[field])
         return params
@@ -117,16 +120,14 @@ class Params:
         """
         Convert a string into a params instance
 
-        :param string:
-        :return:
+        :param string: a string representation of a Params instance
         """
         return cls.from_dict(eval(string))
 
     @classmethod
     def from_arr(cls, arr):
         """
-        Convert a 1d array of characters into a string and then into a params
-        instance
+        Convert a 1d array of characters into a params instance
 
         :param arr:
         :return:
@@ -138,8 +139,6 @@ class Params:
     def as_string(self):
         """
         Return a string representation of the params instance
-
-        :return:
         """
         return str(vars(self))
 
@@ -148,8 +147,6 @@ class Params:
         """
         Return an array of dtype U1 holding the parameter string as single
         characters
-
-        :return:
         """
         return np.array(list(self.as_string), dtype="U1")
 
@@ -158,54 +155,57 @@ class Params:
         return dict(vars(self))
 
     def __str__(self):
+        """
+        Print the value of each parameter field
+        """
         _dict = self.as_dict
         _out = [f"{key :.<25} {str(_dict[key])}" for key in _dict]
         out = "\n".join(_out)
         return out
 
     def __repr__(self):
-        prototype = Params(10_000, 10, 0.1)
-        proto_dict = dict(vars(prototype))
+        """
+        Print a representation of the Params instance
+        """
+        basic = Params(self.g)
+        basic_dict = dict(vars(basic))
         self_dict = dict(vars(self))
-        difs = []
+        diffs = []
         for parameter in self_dict:
-            if self_dict[parameter] != proto_dict[parameter]:
-                if parameter not in ["K", "g", 'c']:
-                    difs.append(parameter)
-        string = ""
-        for dif in difs:
-            string += f"params.{dif} = {self_dict[dif]} \n"
-        return f"params = Params({self.K}, {self.g}, {self.c}) \n" + string
+            if self_dict[parameter] != basic_dict[parameter]:
+                if parameter != "g":
+                    diffs.append(parameter)
+        out = f"params({self.g}"
+        for dif in diffs:
+            out += f", {dif}={self_dict[dif]}"
+        return out
 
-    def save(self, filename):
+    def save(self, filename, path=None):
         """
         Write a dictionary representation of the params class instance in a
-        .json file in the directory hybzones/parameters
+        .json file. By default, write to the hybzones/parameters directory
+        unless a path is specified
+
+        :param filename:
+        :param path:
         """
-        base_dir = os.getcwd().replace(r"\hybzones", "") + r"\hybzones"
-        param_dir = base_dir + "\\parameters\\"
-        filename = param_dir + filename
+        if not path:
+            root = os.getcwd()
+            path = root.replace("hybzones\\hybzones", "hybzones\\parameters\\")
+        filename = path + filename
         param_dict = vars(self)
         file = open(filename, 'w')
-        json.dump(param_dict, file, indent=0)
+        json.dump(param_dict, file, indent=4)
         file.close()
         print("params file written to " + filename)
 
-    def parse(self):
-        """Check to make sure that parameters stored as lists are the proper
-        length and that values are not out of range"""
-        if len(self.subpop_n) != 9:
-            raise Exception("Invalid length: %d for subpop_n!" %
-                            len(self.subpop_n))
-        if len(self.subpop_lims) != 9:
-            raise Exception("Invalid length: %d for subpop_lims!" %
-                            len(self.subpop_lims))
-        if self.pref_model not in c_matrix_methods:
-            raise Exception(f"{self.pref_model} is not a valid pref_model!")
+    @property
+    def c_matrix(self):
+        """
+        Get the matrix of assortation levels defined by parameters c and
+        pref_model.
 
-    def get_c_matrix(self):
-        """Get the matrix of biases to mating probabilities given by the
-        parameters "c" and "pref_model"
+        :returns: 3x3 numpy array of assortative levels
         """
         if self.pref_model in c_matrix_methods:
             c_matrix = c_matrix_methods[self.pref_model](self.c)
@@ -215,15 +215,16 @@ class Params:
         return c_matrix
 
     def print_c(self):
-        """Print out a table of the assortative parameters defined by the
-        instance
+        """
+        Print out a table of the assortation levels defined by parameters c
+        and pref_model.
         """
         printout = np.zeros((4, 4), dtype="U16")
         printout[0, :] = ["            ", "pref B = 1", "pref B = H",
                           "pref B = 2"]
         printout[1:, 0] = ["signal A = 1", "signal A = H", "signal A = 2"]
         length = len(printout[0, 1])
-        c_matrix = self.get_c_matrix()
+        c_matrix = self.c_matrix
         strings = [" " * (length - len(str(i))) + str(i) for i in
                    np.ravel(c_matrix)]
         printout[1:, 1:] = np.reshape(strings, (3, 3))
@@ -247,7 +248,7 @@ class Params:
         sub.plot(x, 1 - 2 * s2, color="blue", label="1 - 2s_2")
         util.setup_space_plot(sub, 1.01, "relative fitness",
                               "environmental fitness")
-        sub.legend(loc="lower left")
+        fig.legend(loc="lower left")
         fig.show()
 
     def plot_scale(self, center=0.5):
@@ -262,9 +263,10 @@ class Params:
         delta = util.compute_pd(x - center, self.delta)
         beta /= np.max(beta)
         delta /= np.max(delta)
-        sub.plot(x, beta, color='red')
-        sub.plot(x, delta, color='orange')
+        sub.plot(x, beta, color='red', label="mating distribution")
+        sub.plot(x, delta, color='orange', label="dispersal distribution")
         util.setup_space_plot(sub, 1.01, "normalized density", "scale")
+        fig.legend()
         fig.show()
 
 
@@ -305,16 +307,6 @@ def get_distinct_c_matrix(c):
     return c_matrix
 
 
-def get_memory_size(g, K=10_000):
-    """
-    Get est memory use in bytes
-    """
-    total = 0
-    est_pedigree = (K * (4 * 4) + (1 * 4) + (3 * 1)) * (g + 1)
-    total += est_pedigree
-    return total
-
-
 # map the string names of preference models to the functions which implement
 # them
 c_matrix_methods = {"null" : get_null_c_matrix,
@@ -327,4 +319,3 @@ c_matrix_methods = {"null" : get_null_c_matrix,
 if __name__ == "__main__":
     plt.rcParams['figure.dpi'] = 100
     matplotlib.use('Qt5Agg')
-
