@@ -2,7 +2,7 @@
 
 Hybzones is a population model for the study of the genetic structure of interspecies hybrid zones. It explicitly, although simply, models the behavior of individual organisms in a continuous 1-dimensional space across discrete generations to generate large, biologically plausible pedigrees. I have implemented various models of assortative mate selection and spatial fitness to further increase the biological realism of the system. 
 
-Once pedigrees have been produced by the explicit simulation, they may be converted into tskit pedigrees for further genetic simulation in msprime. This pipeline allows us to examine a number of genetic statistics to be examined under a variety of explicit simulation parameters and models.
+Once pedigrees have been produced by the explicit simulation, they may be converted into msprime pedigrees using the PedigreeBuilder class and used as platforms for coalescent simulations. This pipeline allows us to examine a number of genetic statistics under varying explicit simulation parameters and models.
 
 
 ## Setup
@@ -16,6 +16,33 @@ Running an explicit simulation is relatively simple. Let us initialize and run a
 
 	params = parameters.Params(g=100)
 	trial = Trial(params, n_snaps=10)
+	
+Upon initializion, the `Trial` class instance immediately runs the simulation. We might expect the simulation to take roughly 0.1-0.15 seconds per generation with a carrying capacity parameter of `K` = 10,000. The constructed pedigree table is an instance variable of the `trial` class instance; we can access it with
+
+	pedigree_table = trial.pedigree_table
+	
+`trial` will also include its own parameter set as an instance variable. If we wish to see part of the pedigree, rows can be printed with 
+
+	print(pedigree_table.cols)
+	
+Single generations can be extracted out of the whole pedigree table using 
+
+    generation_table = pedigree_table.get_generation(t)
+
+	
+discuss arrays
+
+discuss genetic simulation
+
+
+## Data structure
+
+
+
+
+## Model structure
+
+
 
 
 
