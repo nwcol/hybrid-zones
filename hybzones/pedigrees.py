@@ -25,33 +25,8 @@ if __name__ == "__main__":
     plt.rcParams['figure.dpi'] = 100
     matplotlib.use('Qt5Agg')
 
-"""
-PEDIGREES: TO-DO
-
-- flux edges; currently does not work. need to implement migrant creator
-
-- test the dispersal models and ensure the computations are correct
-
-- add __repr__ etc for base table class, pay some attention to this class
-
-- fix all the functions/methods which save files to make sure they flexibly
-save in the correct directories
-
-- learn how to manipulate files and directories with cmd prompt and start 
-doing this more
-
-- learn how to interact with the cluster using prompt or shell (???) ask people
-
-- better __repr__, __str__ for pedigree and generation tables
-
-- handling zero length columns
-
-- handling extinction and ungraceful exits for simulation
-"""
-
 
 class Columns:
-
     """
     The core of pedigree and generation table objects, and therefore of the
     simulation. Analogous to a table; each Columns instance holds a bundle

@@ -671,7 +671,7 @@ class SummaryCollection:
         return std_speed
 
 
-class OverCollection:
+class CollectionCollection:
 
     """
     Intended as a container for SummaryCollections; to be used in comparing
@@ -890,7 +890,34 @@ class OverCollection:
             fig.title(title)
         fig.show()
 
-    
+    def plot_all_clines(self, n=10):
+        n += 1
+        if n in Constants.shape_dict:
+            n_rows, n_cols = Constants.shape_dict[n]
+        else:
+            n_rows = 2
+            n_cols = (n + 1) // 2
+        plot_shape = (n_rows, n_cols)
+        size = (n_cols * 4, n_rows * 3)
+        figure, axs = plt.subplots(n_rows, n_cols, figsize=size, sharex='all')
+        figure.tight_layout(pad=3.0)
+        figure.subplots_adjust(right=0.9)
+        x = util.get_bin_mids(self.bin_size)
+        c1 = Constants.allele_colors[1]
+        c2 = Constants.allele_colors[3]
+        colors = self.colors
+        for i in np.arange(n):
+            t = self.snapshot_t[i]
+            j = np.searchsorted(self.snapshot_t, t)
+            index = np.unravel_index(i, plot_shape)
+            ax = axs[index]
+            for k, coll in enumerate(self.collections):
+                for arr in coll.summaries:
+                    cline = arr.allele_arr.freq[j, :, 0, 1]
+                    ax.plot(x, cline, linewidth=2, color=colors[k])
+            title = "t = " + str(t)
+            util.setup_space_plot(ax, 1.01, "allele frequency", title)
+        figure.show()
 
 
 class AlleleArr:
@@ -1822,20 +1849,5 @@ class MatingHistograms:
         fig0.suptitle("Female fecundities")
         fig0.show()
 
-#col = OverCollection("fitness2")
 
-
-#example = GenotypeArr.load_txt("c:/hybzones/data/fitness/group4/fitness_group4_arr_13756400_4.txt")
-#group1 = GenotypeArrCollection.load_directory(r"fitness/group1")
-#group2 = SummaryCollection(r"fitness1\\group2")
-#group3 = GenotypeArrCollection.load_directory(r"fitness/group3")
-#group4 = GenotypeArrCollection.load_directory(r"fitness/group4")
-#group5 = GenotypeArrCollection.load_directory(r"fitness/group5")
-#group6 = GenotypeArrCollection.load_directory(r"fitness/group6")
-#group7 = GenotypeArrCollection.load_directory(r"fitness/group7")
-#group8 = GenotypeArrCollection.load_directory(r"fitness/group8")
-#group9 = GenotypeArrCollection.load_directory(r"fitness/group9")
-
-
-#why do trials with only 1 extant group have std with magnitude?
-
+# col = CollectionCollection("matingmodels")
