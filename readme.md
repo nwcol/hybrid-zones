@@ -21,7 +21,7 @@ Upon initializion, the `Trial` class instance immediately runs the simulation. W
 
 	pedigree_table = trial.pedigree_table
 	
-`trial` will also include its own parameter set as an instance variable. If we wish to see part of the pedigree, rows can be printed with 
+`trial` will also include its own parameters as an instance variable. If we wish to see part of the pedigree, rows can be printed with 
 
 	print(pedigree_table.cols)
 	
@@ -37,10 +37,32 @@ discuss genetic simulation
 
 ## Data structure
 
+The data structure was inspired by the tskit Tables class and its subclasses. It was also designed to minimize memory utilization, as pedigree tables can become extremely large structures when simulations endure for long periods (tens of thousands of generations).
+
+### Params class
+
+The `Params` class holds the parameters which define the duration of the simulation, the models of mating and dispersal, and all other user-changeable simulation parameters. Further information is provided in the docs folder.
+
+### Columns class
+
+The `Columns` class is the basis of my table classes. It is composed of several long vectors of equal length, which act as columns in an array of heterogenous type. For instance, the `sex` column has the data type `np.uint8` while `x` is type `np.float32`. The number of columns included in a `Columns` instance is dynamic, but 4 column categories are mandatory since they are required to reconstruct ancestries: `id`, `maternal_id`, `paternal_id` and `time`. 
+
+### Table class
+
+The `Table` class is the superclass of the `PedigreeTable` and `GenerationTable` classes and acts as a wrapper for a single `Columns` class. Arbitrary slices of `GenerationTable` and `PedigreeTable` instances are returned as `Table` instances.
+
+### GenerationTable class
+
+The `GenerationTable` class is the structure which is actively manipulated throughout the process of simulation. It represents the present generation.
+
+### PedigreeTable class
+
+The product of a simulation. 
+
+### Trial class
 
 
-
-## Model structure
+## Model: Process and Assumptions
 
 
 
