@@ -38,8 +38,3 @@ GENERATIONS                  N WINDOWS             PEAK USAGE / REQUEST
 
 20,000 generations ......... 100 windows ......... 86.0-92.0 Gb / 140 Gb
 
-
-
-
-Containers = directories ~= "lightweight virtual machines"
-contains .json config file

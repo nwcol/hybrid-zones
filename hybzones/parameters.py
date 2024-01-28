@@ -16,8 +16,6 @@ class Params:
     A class defining simulation parameters. Almost all parameters have default
     values, so non-default parameters must be explicitly declared after
     instantiation.
-
-    Documentation at https://docs.google.com/document/d/16BmLuji9_FA6kHPHW1C6G7iGMdRR0JPiug14B4aTG8s/edit?usp=sharing
     """
 
     def __init__(self, g, **kwargs):
@@ -55,20 +53,6 @@ class Params:
         self.k_2 = 20
         self.mid_1 = 0.5
         self.mid_2 = 0.5
-        # scripting
-        self.history_type = "pedigree_table"
-        self.task = None
-        # genetic parameters
-        self.sample_bins = None
-        self.sample_sizes = None
-        self.time_cutoffs = [None, None]
-        self.n_windows = 10
-        self.seq_length = 1e4
-        self.recombination_rate = 1e-8
-        self.u = 1e-8
-        self.demographic_model = "one_pop"
-        self.mig_rate = None
-        self.rooted = True
         self_dict = self.as_dict
         for key in kwargs:
             if key in self_dict:
@@ -77,7 +61,7 @@ class Params:
                 raise AttributeError(f"{key} is not a valid parameter field")
 
     @classmethod
-    def load(cls, filename, path=None):
+    def load(cls, path):
         """
         Instantiate a Params instance from a .json params file
 
@@ -85,11 +69,7 @@ class Params:
             path is not specified, in the hybzones/parameters directory
         :param path: if specified, load filename from this path
         """
-        if not path:
-            root = os.getcwd()
-            path = root.replace("hybzones\\hybzones", "hybzones\\parameters\\")
-        filename = path + filename
-        file = open(filename, 'r')
+        file = open(path, 'r')
         param_dict = json.load(file)
         file.close()
         params = cls(0)
@@ -175,12 +155,12 @@ class Params:
             if self_dict[parameter] != basic_dict[parameter]:
                 if parameter != "g":
                     diffs.append(parameter)
-        out = f"params({self.g}"
+        out = f"params({self.g})"
         for dif in diffs:
             out += f", {dif}={self_dict[dif]}"
         return out
 
-    def save(self, filename, path=None):
+    def save(self, path):
         """
         Write a dictionary representation of the params class instance in a
         .json file. By default, write to the hybzones/parameters directory
@@ -189,15 +169,11 @@ class Params:
         :param filename:
         :param path:
         """
-        if not path:
-            root = os.getcwd()
-            path = root.replace("hybzones\\hybzones", "hybzones\\parameters\\")
-        filename = path + filename
         param_dict = vars(self)
-        file = open(filename, 'w')
+        file = open(path, 'w')
         json.dump(param_dict, file, indent=4)
         file.close()
-        print("params file written to " + filename)
+        print("params file written to " + path)
 
     @property
     def c_matrix(self):
@@ -314,8 +290,3 @@ c_matrix_methods = {"null" : get_null_c_matrix,
                     "undesirable" : get_undesirable_c_matrix,
                     "semi_undesirable": get_semi_undesirable_c_matrix,
                     "distinct" : get_distinct_c_matrix}
-
-
-if __name__ == "__main__":
-    plt.rcParams['figure.dpi'] = 100
-    matplotlib.use('Qt5Agg')

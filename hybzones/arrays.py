@@ -1,3 +1,7 @@
+
+# A collection of data structures for recording and interpreting population
+# histories. 
+
 import matplotlib
 
 import matplotlib.pyplot as plt
@@ -1848,6 +1852,3 @@ class MatingHistograms:
             fig0.colorbar(p0)
         fig0.suptitle("Female fecundities")
         fig0.show()
-
-
-# col = CollectionCollection("matingmodels")

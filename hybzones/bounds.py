@@ -1,3 +1,6 @@
+
+# A class to track interaction bounds between organisms
+
 import numpy as np
 
 
@@ -5,7 +8,7 @@ class Bounds:
 
     def __init__(self, generation_table, seeking_sex, target_sex, limits):
         """
-        Compute bounds lol
+        Sets up an array of indices in "target_sex" for "seeking_sex"
 
         :param seeking_sex:
         :param target_sex: if -1, target the entire generation. else target

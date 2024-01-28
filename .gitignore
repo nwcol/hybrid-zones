@@ -1,6 +1,5 @@
 .idea/
-data/
-env/
+.venv/
 __pycache__
 *.svg
 *.pyc

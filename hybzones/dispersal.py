@@ -1,3 +1,6 @@
+
+# flux_edge was never fully re-implemented. 
+
 import numpy as np
 
 import scipy

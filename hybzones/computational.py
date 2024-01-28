@@ -1,3 +1,9 @@
+
+# This module was a casual attempt to develop a purely compuational model 
+# which would mimic the behavior of the stochastic individual-based
+# simulation, so that fitness and assortation regimes which set up equilibria
+# could be more easily found. 
+
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -11,21 +17,6 @@ from hybzones import parameters
 from hybzones.parameters import Params
 
 from hybzones.constants import Constants
-
-"""
-Assumptions.
-
-We partition the population into males and females, but we assume that 
-everywhere the sex ratio is exactly 1:1
-
-Things to add to increase the sophisitication of the model
--assortation
--think about whether your model of assortation is even correct
--multi-bin dispersal
--across-bin mating
--dispersal fxns (nonrandom)
--migration
-"""
 
 
 class Matrix:
@@ -494,7 +485,3 @@ def get_master_cube():
     mega_cube = np.zeros((100, 9, 9, 9))
     mega_cube[:] = master_cube
     return mega_cube
-
-
-params0 = Params(10_000, 20, 0.1)
-trial0 = CompTrial(params0)

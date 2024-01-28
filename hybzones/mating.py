@@ -82,9 +82,6 @@ class IdMap:
 
 
 class Matings:
-    """
-
-    """
 
     def __init__(self, parent_table):
         self.params = parent_table.params

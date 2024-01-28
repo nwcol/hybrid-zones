@@ -21,11 +21,6 @@ from hybzones import parameters
 from hybzones import util
 
 
-if __name__ == "__main__":
-    plt.rcParams['figure.dpi'] = 100
-    matplotlib.use('Qt5Agg')
-
-
 class Columns:
     """
     The core of pedigree and generation table objects, and therefore of the
@@ -938,8 +933,8 @@ class PedigreeTable(Table):
                 f"{self.filled_rows} of {self.max_rows} filled")
 
     def __str__(self):
-        return (f"PedigreeTable with g = {self.g}, t = {self.t}, \n"
-                f"{self.filled_rows} of {self.max_rows} filled "
+        return (f"PedigreeTable with g = {self.g}, t = {self.t}, "
+                f"{self.filled_rows} of {self.max_rows} filled \n"
                 + self.cols.__str__())
 
     def enter_generation(self, generation_table):
@@ -1150,7 +1145,7 @@ class PedigreeTable(Table):
 
 class Trial:
 
-    def __init__(self, params, n_snaps=None):
+    def __init__(self, params, n_snaps=None, history_type="pedigree_table"):
         self.run_time_0 = time.time()
         self.run_time_vec = np.zeros(params.g + 1)
         self.report_int = max(min(100, params.g // 10), 1)
@@ -1160,12 +1155,12 @@ class Trial:
         self.g = params.g
         self.t = params.g
         self.params = params
-        if params.history_type == "pedigree_table":
+        if history_type == "pedigree_table":
             self.history_type = "pedigree_table"
             self.pedigree_table = PedigreeTable.initialize_from_params(params,
                 col_names=["sex", "x", "alleles", "flag"])
             self.genotype_arr = None
-        elif params.history_type == "genotype_arr":
+        elif history_type == "genotype_arr":
             self.history_type = "genotype_arr"
             self.genotype_arr = arrays.GenotypeArr.initialize(params)
             self.pedigree_table = None

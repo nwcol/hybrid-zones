@@ -19,28 +19,7 @@ from hybzones import pedigrees
 from hybzones import util
 
 
-if __name__ == "__main__":
-    plt.rcParams['figure.dpi'] = 100
-    matplotlib.use('Qt5Agg')
-
-
-"""
-GENETICS: TO-DO
-
-Baseline coalescence simulations to investigate diversity
-
-
-Using complex sample definitions
-
-Sampling from the same pedigree many times
-
-Handling earliest-gen parents in slice samples (samples which dont include
-entire time span)
-
-"""
-
-
-def explicit_coalescent(tc, params):
+def explicit_coalescent(tc, r):
     """
     Run a coalescent simulation over a table collection using the
     fixed_pedigree model
@@ -51,11 +30,11 @@ def explicit_coalescent(tc, params):
     :return: tree sequence
     """
     ts = msprime.sim_ancestry(initial_state=tc, model="fixed_pedigree",
-                              recombination_rate=params.recombination_rate)
+                              recombination_rate=r)
     return ts
 
 
-def reconstructive_coalescent(ts0, params, demography):
+def reconstructive_coalescent(ts0, r, demography):
     """
     Root a tree sequence derived from explicit_coalescence using the dtwf
     model and a given demographic model
@@ -67,7 +46,7 @@ def reconstructive_coalescent(ts0, params, demography):
     """
     ts = msprime.sim_ancestry(initial_state=ts0, demography=demography,
                               model="dtwf",
-                              recombination_rate=params.recombination_rate)
+                              recombination_rate=r)
     return ts
 
 
@@ -97,7 +76,7 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
 
     size_factor = 0.64
 
-    def __init__(self, pedigree_table, sample_ids=None):
+    def __init__(self, pedigree_table, sample_ids,  sample_bins, sample_sizes):
         params = pedigree_table.params
         col_names = pedigree_table.cols.col_names
         self.time_index = self.get_time_index(params)
@@ -107,31 +86,27 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         t = self.time_index[0]
         g = params.g
         super().__init__(cols, params, t, g)
-        self.sample_bins = params.sample_bins
-        self.sample_sizes = params.sample_sizes
-        if not sample_ids:
-            sample_ids = self.get_last_gen_ids(
-                pedigree_table.get_generation(0))
+        self.sample_bins = sample_bins
+        self.sample_sizes = sample_sizes
         self.get_sample(pedigree_table, sample_ids)
-        if self.params.demographic_model == "one_pop":
-            self.demography = self.get_one_pop_demography(params)
-        elif self.params.demographic_model == "three_pop":
-            self.demography = self.get_three_pop_demography(params)
-        else:
-            self.demography = None
 
     @classmethod
-    def from_trial(cls, trial):
-        return cls(trial.pedigree_table)
-
-    @classmethod
-    def custom_sample(cls, trial, sample_bins, sample_sizes, **kwargs):
-        pass
-        # set this up later
-
-    @classmethod
-    def custom_sample_ids(cls, trial, sample_ids):
-        return cls(trial.pedigree_table, sample_ids=sample_ids)
+    def sample(cls, pedigree_table, sample_bins, sample_sizes):
+        """
+        Sample n individuals from each bin specified in bins from the most
+        recent generation
+        
+        :param pedigree_table: 
+        :param sample_bins: list or array specifying bin edges, of length n_bins + 1
+        :param sample_sizes: integer or list of length n_bins specifying sample sizes
+        """
+        if type(sample_sizes) == int:
+            sample_sizes = [sample_sizes for i in range(len(sample_bins))]
+        sample_bins = [[sample_bins[i], sample_bins[i + 1]] 
+                      for i in range(len(sample_bins) - 1)]
+        sample_ids = cls.get_last_gen_ids(pedigree_table.get_generation(0),
+            sample_bins, sample_sizes)
+        return cls(pedigree_table, sample_ids, sample_bins, sample_sizes)
 
     def compute_max_rows(self, params):
         return int(self.size_factor * len(self.time_index) * params.K)
@@ -190,7 +165,8 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         sample = sample[sample.cols.id.argsort()]  # sort by ID
         return sample
 
-    def get_last_gen_ids(self, last_gen):
+    @staticmethod
+    def get_last_gen_ids(last_gen, sample_bins, sample_sizes):
         """
         Get the relative ids to sample in the generation
 
@@ -198,7 +174,7 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         :return:
         """
         sample_ids = []
-        for sample_bin, size in zip(self.sample_bins, self.sample_sizes):
+        for sample_bin, size in zip(sample_bins, sample_sizes):
             ids = last_gen.cols.get_subpop_index(x=sample_bin)
             try:
                 _sample_ids = np.random.choice(ids, size=size, replace=False)
@@ -250,11 +226,11 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
             sizes[i] = self.cols.get_subpop_size(time=t)
         return sizes
 
-    def get_tc(self):
+    def get_tc(self, demography):
         """
         Build a pedigree table collection from the sample pedigree array
         """
-        ped_tc = msprime.PedigreeBuilder(demography=self.demography)
+        ped_tc = msprime.PedigreeBuilder(demography=demography)
         #  INDS
         n = len(self)
         ind_flag = self.cols.flag.astype(np.uint32)
@@ -275,8 +251,7 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         ped_tc = ped_tc.finalise(sequence_length=self.params.seq_length)
         return ped_tc
 
-    @staticmethod
-    def get_one_pop_demography(params):
+    def get_one_pop_demography(self):
         """
         Construct a basic demography with a single population, pop0
 
@@ -284,11 +259,10 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         :return: demography instance
         """
         demography = msprime.Demography()
-        demography.add_population(name="pop0", initial_size=params.K)
+        demography.add_population(name="pop0", initial_size=self.params.K)
         return demography
 
-    @staticmethod
-    def get_three_pop_demography(params):
+    def get_three_pop_demography(self, mig_rate):
         """
         Construct a basic demography with three populations
 
@@ -302,11 +276,10 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         :return: demography instance
         """
         demography = msprime.Demography()
-        demography.add_population(name="pop0", initial_size=params.K)
-        demography.add_population(name="pop1", initial_size=params.K // 2)
-        demography.add_population(name="pop2", initial_size=params.K // 2)
-        m = params.mig_rate
-        demography.set_symmetric_migration_rate(["pop1", "pop2"], m)
+        demography.add_population(name="pop0", initial_size=self.params.K)
+        demography.add_population(name="pop1", initial_size=self.params.K // 2)
+        demography.add_population(name="pop2", initial_size=self.params.K // 2)
+        demography.set_symmetric_migration_rate(["pop1", "pop2"], mig_rate)
         return demography
 
     def get_three_pop_ids(self):
@@ -433,24 +406,39 @@ class MultiWindow:
     pedigree table. There are two somewhat divergent functions for the class;
     it functions to simulate coalescence and gather statistic as well as to
     load existing statistics created by instances of itself and analyze them
-
-    lol
     """
 
-    def __init__(self, pi, pi_xy, genotype_pi, params):
-        self.pi = pi
-        self.pi_xy = pi_xy
-        self.genotype_pi = genotype_pi
-        self.params = params
-        self.demography = None
-        self.window_kb = params.seq_length / 1000
-        self.total_Mb = self.window_kb * params.n_windows / 1000
-        self.sample_bins = None
-        self.sample_sets = []
-        self.genotype_sample_sets = []
+    def __init__(self, sample_pedigree, n_windows, seq_length=1e4, r=1e-8, 
+                 u=1e-8, rooted=True, demog="one_pop", mig_rate=None):
+        self.sample_bins = sample_pedigree.sample_bins
+        self.sample_sizes = sample_pedigree.sample_sizes
+        self.n_windows = n_windows
+        self.seq_length = seq_length
+        self.r = r
+        self.u = u
+        self.rooted = rooted
+        self.demographic_model = demog
+        self.mig_rate = mig_rate
+        n_bins = len(self.sample_bins)
+        self.pi = np.zeros((n_windows, n_bins))
+        self.genotype_pi = np.zeros((n_windows, 9, n_bins))
+        self.pi_xy = np.zeros((n_windows, n_bins, n_bins))
+        if demog == "one_pop":
+            self.demography = sample_pedigree.get_one_pop_demography()
+        elif demog == "three_pop":
+            self.demography = sample_pedigree.get_three_pop_demography(
+                mig_rate)
+        self.sample_bins = sample_pedigree.sample_bins
+        self.sample_sets = self.get_sample_sets(sample_pedigree)
+        self.genotype_sample_sets = self.get_genotype_sample_sets(
+            sample_pedigree)
+        tc = sample_pedigree.get_tc(self.demography)
+        self.run(tc)
+        self.window_kb = self.seq_length / 1000
+        self.total_Mb = self.window_kb * self.n_windows / 1000
 
     @classmethod
-    def new(cls, sample_pedigree_table):
+    def deprecated(cls, sample_pedigree_table):
         """
         Run simulations over a sample pedigree table as defined in the table's
         params instance.
@@ -475,17 +463,8 @@ class MultiWindow:
         inst.run(tc)
         return inst
 
-    @classmethod
-    def load(cls, filename):
-        dic = np.load(filename)
-        pi = dic["pi"]
-        pi_xy = dic["pi_xy"]
-        genotype_pi = dic["genotype_pi"]
-        params = parameters.Params.from_arr(dic["param_arr"])
-        return cls(pi, pi_xy, genotype_pi, params)
-
     def run(self, tc):
-        for i in np.arange(self.params.n_windows):
+        for i in np.arange(self.n_windows):
             pi, pi_xy, genotype_pi = self.get_window(tc)
             self.pi[i, :] = pi
             self.pi_xy[i, :, :] = pi_xy
@@ -539,9 +518,9 @@ class MultiWindow:
 
         :param tc: table collection to simulate over
         """
-        ts = explicit_coalescent(tc, self.params)
-        if self.params.rooted:
-            ts = reconstructive_coalescent(ts, self.params, self.demography)
+        ts = explicit_coalescent(tc, self.r)
+        if self.rooted:
+            ts = reconstructive_coalescent(ts, self.r, self.demography)
         pi = self.get_diversities(ts, self.sample_sets)
         pi_xy = self.get_divergences(ts, self.sample_sets)
         n_bins = len(self.sample_bins)
@@ -562,7 +541,7 @@ class MultiWindow:
         for i in np.arange(n_sets):
             pi[i] = ts.diversity(sample_sets=sample_sets[i].node_ids,
                                  mode="branch")
-        pi *= self.params.u
+        pi *= self.u
         return pi
 
     def get_divergences(self, ts, sample_sets):
@@ -574,7 +553,7 @@ class MultiWindow:
                 sample_sets=[sample_sets[idx[0]].node_ids,
                              sample_sets[idx[1]].node_ids],
                 mode="branch")
-        pi_xy *= self.params.u
+        pi_xy *= self.u
         return pi_xy
 
     @property
@@ -900,46 +879,3 @@ def plot_summary_stats(dict_list):
     sub.set_ylim(0, 0.0005)
     sub.set_ylabel("nucleotide diversity/divergence")
     fig.show()
-
-
-# debug. tests important functions and creates example objects
-if __name__ == "__main__" and 1 == 2:
-    _params = parameters.Params(10_000, 10, 0.1)
-    _params.sample_sizes = np.full(10, 2)
-    _params.n_windows = 2
-    _trial = pedigrees.Trial(_params)
-    _sample_pedigree = SamplePedigreeTable.from_trial(_trial)
-    _multiwindow = MultiWindow.new(_sample_pedigree)
-
-
-if __name__ == "__main__":
-    unrooted_10 = MultiWindowCollection.load_dir(
-        "unrooted_10").get_summary_stats()
-    unrooted_100 = MultiWindowCollection.load_dir(
-        "unrooted_100").get_summary_stats()
-    unrooted_1k = MultiWindowCollection.load_dir(
-        "unrooted_1k").get_summary_stats()
-    unrooted_5k = MultiWindowCollection.load_dir(
-        "unrooted_5k").get_summary_stats()
-    unrooted_10k = MultiWindowCollection.load_dir(
-        "unrooted_10k").get_summary_stats()
-    unrooted_15k = MultiWindowCollection.load_dir(
-        "unrooted_15k").get_summary_stats()
-    unrooted_20k = MultiWindowCollection.load_dir(
-        "unrooted_20k").get_summary_stats()
-    rooted_10 = MultiWindowCollection.load_dir(
-        "rooted_10").get_summary_stats()
-    rooted_100 = MultiWindowCollection.load_dir(
-        "rooted_100").get_summary_stats()
-    rooted_1k = MultiWindowCollection.load_dir("rooted_1k").get_summary_stats()
-    rooted_5k = MultiWindowCollection.load_dir("rooted_5k").get_summary_stats()
-    rooted_10k = MultiWindowCollection.load_dir(
-        "rooted_10k").get_summary_stats()
-    rooted_15k = MultiWindowCollection.load_dir(
-        "rooted_15k").get_summary_stats()
-    rooted_20k = MultiWindowCollection.load_dir(
-        "rooted_20k").get_summary_stats()
-    plot_summary_stats([unrooted_10, unrooted_100, unrooted_1k, unrooted_5k,
-                        unrooted_10k, unrooted_15k, unrooted_20k,
-                        rooted_10, rooted_100, rooted_1k, rooted_5k,
-                        rooted_10k, rooted_15k, rooted_20k])
