@@ -1,12 +1,11 @@
 ## Introduction
-The `Params` class is a required argument to instantiate the `Trial` class. Its role is to store an immutable collection of simulation parameters. During simulation, the `Params` instance is repeatedly passed to lower-level objects and made an attribute of structures such as the pedigree table, where its attributes are accessed to govern a variety of processes. Params instances can be saved as JSON format files. 
+The `Params` class is a required as an argument in instantiating an instance of the `Trial` class. Its role is to store an immutable collection of simulation parameters. During simulation, the `Params` instance is repeatedly passed to lower-level objects and made an attribute of structures such as the pedigree table, where its attributes are accessed to govern a variety of simulation processes. Params instances can be saved as JSON format files.
 
 The only required argument to initialize a Params instance is `g`, the number of generations to simulate; all other attributes have default values which can be overridden by keyword arguments.
 
-
 ## Parameters
 
-Here is a list of Params attributes and their types, biological interpretations, and functions in the simulation. 
+Here is a list of Params attributes and their types, biological interpretations, and roles in the simulation.
 
 `subpop_n` : list of int, default `[N/2, 0, 0, 0, 0, 0, 0, 0, N/2]`
 
@@ -109,7 +108,6 @@ where
 	S_1(x) = mu - mu / (1 + exp{-k_1(x - mid_1)})
 	S_2(x) = mu - mu / (1 + exp{-k_2(x - mid_2)})
 
-
 `female_fitness`: bool, default `False`
 
 Defines whether females are affected by intrinsic and extrinsic fitness. 
@@ -133,47 +131,3 @@ Defines the midpoint/inflection point of the fitness curve for A¹.
 `mid_2` : float, default 0.5
 
 Defines the midpoint/inflection point of the fitness curve for A². 
-
-`history_type` : string, default “pedigree_table”
-
-Defines the simulation output type. There are two options: pedigree_table and genotype_arr. Genotype arrays act as a summary of population history and are substantially smaller objects than pedigree tables. They are therefore useful for studying the effects of parameters when the detail provided by a pedigree table is not necessary. Specifically, a genotype array is a 3-dimensional numpy array where genotype_arr.arr[t] contains 9 histograms recording the density of each subpopulation at time t.
-
-`task` : string, default “get_multi_window”
-
-`sample_sizes` : list of ints
-
-`sample_bins` : list of list of floats
-
-`time_cutoffs` : list of ints
-
-remove?
-
-`n_windows` : int
-
-The number of genome windows to simulate coalescence over. For instance, with n_windows = 1000 and seq_length = 10000, effectively 10 Mb of the genome will be simulated.
-
-`mig_rate` : float, default 1e-4
-
-If demographic_model == “three_pop”, defines the migration rate e.g. population turnover per generation between the two ancestral populations. Some level of migration between the ancestral populations is required to permit coalescence to a single root per tree structure.
-
-`seq_length` : int, default 1e4
-
-The number of base pairs to simulate coalescence over, per window.
-
-`recombination_rate` : float, default 1e-8
-
-The recombination rate parameter for coalescence simulation in msprime.
-
-`u` : float, default 1e-8
-
-Defines the mutation rate. Used to convert diversity in terms of branch lengths into nucleotide diversity. 
-
-`demographic_model` : string, default “one_pop”
-
-Defines the demographic model to be used in extended coalescence simulation if rooted == True.
-
-`rooted` : bool, default True
-
-Only used when the task being performed involves coalescence simulation. If True, perform a second coalescent simulation using the tree sequence from coalescence simulation over the pedigree as a base, thereby rooting all sample individuals somewhere in the remote past before the explicit simulation.
-
-

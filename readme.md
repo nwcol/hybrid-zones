@@ -1,6 +1,6 @@
 ## Introduction
 
-Hybzones is a model I wrote to study genetic structure in interspecies hybrid zones. It explicitly, although simply, models the behavior of individual organisms in a continuous 1-dimensional space across discrete generations to generate large, biologically plausible pedigrees. I have implemented various models of assortative mate selection and spatial fitness to further increase the biological realism of the system. 
+Hybzones is a model I wrote to study genetic structure in interspecies hybrid zones. It explicitly, although simply, models the behavior of individual organisms in a continuous 1-dimensional space across discrete generations to generate large, biologically plausible pedigrees. I have implemented various models of assortative mate selection and spatially variant fitness to further increase the biological realism of the system. 
 
 Once pedigrees have been produced by the explicit simulation, they can be converted into msprime pedigrees using that packages' PedigreeBuilder class and used as platforms for coalescent simulations. This pipeline allows the examination of a number of genetic statistics under varying simulation parameters and models.
 
