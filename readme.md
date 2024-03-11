@@ -1,6 +1,7 @@
 ### Note
 
-I am no longer actively working on this project, but would be happy to answer any questions about it. 
+I worked on this project during the 2022-2023 academic year as an undergraduate researcher.
+I am no longer actively working on it, but would be happy to answer any questions about it. 
 
 
 ### Introduction
@@ -12,7 +13,7 @@ across discrete generations to generate large, biologically plausible pedigrees,
 can be transformed into `msprime` pedigrees for coalescent simulation. 
 
 There are various models of assortative mate selection and spatially variant fitness 
-to allow the simulation of sundry biological scenarios. 
+to allow the simulation of various biological scenarios. 
 
 
 ### Setup
