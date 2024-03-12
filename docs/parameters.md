@@ -26,13 +26,39 @@ Defines the population growth rate as a parameter in computing expected family s
 
 Defines the duration of the simulation in generations.
 
-`c` : `float`
+`c` : `float`, default `0.1`
 
 Defines the strength of pure (homozygous preference to opposite homozygous signal) assortative mating. Specifically, `c` sets the ratio between the probability that a homozygous-preference female mates with an iso-signal homozygous-signal male and the probability that she mates with an allo-signal homozygous-signal male. The other assortative strengths are determined as a function of c by the preference model.
 
-`pref_model` : `string`
+`pref_model` : `string`, default `"undesirable"`
 
-Defines the preference model, which is a function from `c` to a 3x3 matrix which gives weights to the probabilities mate pairings by genotype.
+Defines the preference model, which is a function from `c` to a 3x3 matrix which gives weights to the probabilities mate pairings by genotype. The models are named for the value they give to heterozygoute desirability. Let `h = (1 + c)/2`. Then, the preference model matrices look like
+
+	"null"
+	np.array([[1, 1, 1],
+                         [1, 1, 1],
+                         [1, 1, 1]], dtype=np.float32)
+
+	"intermediate"
+    c_matrix = np.array([[1, h, c],
+                         [h, 1, h],
+                         [c, h, 1]],  dtype=np.float32)
+
+	"undesirable"
+    c_matrix = np.array([[1, 1, c],
+                         [c, c, c],
+                         [c, 1, 1]],  dtype=np.float32)
+
+	"semi_undesirable"
+    h = (1 + c) / 2
+    c_matrix = np.array([[1, 1, c],
+                         [h, h, h],
+                         [c, 1, 1]], dtype=np.float32)
+
+	"distinct"
+    c_matrix = np.array([[1, c, c],
+                         [c, 1, c],
+                         [c, c, 1]],  dtype=np.float32)
 
 `beta` : `float`, default `0.005`
 
@@ -46,7 +72,7 @@ Defines an upper bound on interaction- specifically mating- and on males’ perc
 
 Defines the extent of space within which individuals affect each other’s observations of density. These observations control reproductive output, which is density-dependent.
 
-`delta` : `float`
+`delta` : `float`, default `0.01`
 
 Defines the standard deviation of the normal distribution from which individual dispersal is sampled for all individuals in the random dispersal model, and for subsets of individuals in other dispersal models.
 
@@ -57,7 +83,7 @@ Defines the dispersal model. There are three dispersal models: `random`, `shift`
 The `shift` model samples from the same distribution for females and males with heterozygous signal genotype, but shifts the mean of the distribution for homozygous-signal males according to those males’ “perceptions” of the signal compositions to their left and right; the mean is shifted towards the direction with a higher proportion of iso-signal males, scaled proportional to the difference.
 
 The `scale` model similarly treats homozygous-signal males differently, altering the standard deviations of their dispersal distributions. Their standard deviations are a function of the proportion of iso-signal males they observe about themselves; males with lower proportions will have higher standard deviations and will tend to disperse farther away.
-Both nonrandom dispersal models propose a mechanism for males with lower mating chances to disperse into areas with potentially better mating prospects.
+Both nonrandom dispersal models propose mechanisms where males with lower mating chances disperse into areas with potentially better mating prospects.
 
 `edge_model` : `string`, default `“closed”`
 

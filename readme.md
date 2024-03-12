@@ -2,11 +2,11 @@
 I worked on this project during the 2022-2023 academic year as an undergraduate researcher. It is no longer under active development, but please feel free to contact me or open issues if you find that anything is obscure or incorrect in function.
 
 ### Introduction
-"Hybzones" is a model I wrote in Python to study the structure of genetic variation in biological hybrid zones. It explicitly simulates the behavior of organisms under assortative mating regimes in a continuous 1-dimensional space across discrete generations to generate large, biologically plausible pedigrees, which can be transformed into `msprime` pedigree table collections for use in coalescent simulation. This allows the estimation of a variety of genetic parameters through space.
+"Hybzones" is a model I wrote in Python to study the structure of genetic variation in biological hybrid zones. It explicitly simulates the behavior of organisms under assortative mating regimes in a continuous 1-dimensional space across discrete generations to generate large, biologically plausible pedigrees, which can be transformed into `msprime` pedigree table collections for use in coalescent simulation. This allows the estimation of the distribution of variety of genetic parameters through space under various population models.
 
-The model is focused on ecological interactions across a frontier or cline between interbreeding taxa, and follows in many respects the model of Payne and Krakauer (Sexual Selection, Space, and Speciation, International Journal of Organic Evolution 51:1 1997). Organisms, which are sexed and diploid, possess two fully penetrant, unlinked biallelic loci 'A' and 'B' which determine, respectively, a mating signal and mating preference phenotype. Under the various models of assortative mating, females with genotype B_x/B_x generally sample mates with signal genotype A_x/A_x with higher probability than they do A_x/A_y or A_y/A_y. The default initial state distributes homozygous organisms with matching signal/preference allele on each side of the space, such that the population usually develops as a pair of flanking homogeneous subpopulations centered around a dynamic hybrid zone.
+The model is focused on ecological interactions across a frontier or cline between interbreeding taxa, and follows in many respects that of Payne and Krakauer (Sexual Selection, Space, and Speciation, International Journal of Organic Evolution 51:1 1997). Organisms, which are sexed and diploid, possess two fully penetrant, unlinked biallelic loci 'A' and 'B' which determine, respectively, a mating signal and mating preference phenotype. Under the various models of assortative mating, females with genotype Bˣ/Bˣ sample mates with signal genotype Aˣ/Aˣ with higher probability than they do Aˣ/Aʸ or Aʸ/Aʸ. The default initial state distributes homozygous organisms with matching signals and preferences on each side of the space, such that the population tends to develop as a pair of flanking homogeneous subpopulations centered around a dynamic hybrid zone.
 
-There are several models of spatially variable fitness and assortative mate selection, which moduleate the strength of assortation and the behavior of heterozygotes, to allow the simulation of various biological scenarios. More information about models and model parameters can be found in docs/parameters.md.
+There are several models of spatially variable fitness and assortative mate selection, which moduleate the strength of assortation and the behavior of heterozygotes, to allow the simulation of various biological scenarios. More information about models and model parameters can be found in `docs/parameters.md`.
 
 ### Setup
 I suggest setting up a Python virtual environment. I use pip as a package manager.
@@ -70,7 +70,7 @@ We can look at the average branch-length diversities and divergences across bins
     windows.mean_pi
 	windows.mean_pi_xy
 
-Or acess the whole array of mean diversities across windows with
+Or access the whole array of mean diversities across windows with
 
     windows.pi
 
