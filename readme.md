@@ -18,7 +18,20 @@ to allow the simulation of various biological scenarios.
 
 ### Setup
 
+I like using virtual environments managed with pip:
 
+    git clone https://github.com/nwcol/hybzones.git
+    python -m venv .venv
+    source .venv/bin/activate
+
+You can install the required packages using
+
+    pip install -r hybzones/requirements.txt
+
+Then install `hybzones` from the cloned directory. 
+
+    pip install hybzones/
+ 
 
 ### Examples
 
@@ -55,7 +68,7 @@ We can sample lineages from within pedigrees by instantiating a `SamplePedigreeT
 The `bin_edges` array specifies the spatial bins that we sample from, and `sample_size` specifies the number of organisms to sample per bin. A list or array of integers with length `len(bin_edges) - 1` may also be provided.
 
 	import numpy as np
-	from hybzone import genetics
+	from hybzones import genetics
 	bin_edges = np.linspace(0, 1, 11)
 	sample_size = 10
 	sample_pedigree = genetics.SamplePedigreeTable.sample(pedigree_table, bin_edges, sample_size)
@@ -63,9 +76,15 @@ The `bin_edges` array specifies the spatial bins that we sample from, and `sampl
 We can now run coalescent simulations through the sample pedigree. The `MultiWindow` class orchestrates the creation of an `msprime` pedigree table collection and coalescent simulation over a set of independent windows. The following command will run coalescent simulations in 10 10kb windows with a recombination rate `r=1e-8`.
 
 	windows = genetics.MultiWindow(sample_pedigree, 10, seq_length=1e4, r=1e-8)
-	windows.mean_pi
-	windows.mean_pi_xy
 	
+We can look at the average branch-length diversities and divergences across bins and windows using
+
+    windows.mean_pi
+	windows.mean_pi_xy
+
+Or acess the whole array of mean diversities across windows with
+
+    windows.pi
 
 	
 

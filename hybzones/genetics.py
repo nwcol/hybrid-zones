@@ -117,8 +117,8 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         Return the continuous block of time defined by the time cutoffs
         parameter, or by 0 and the g parameter if cutoffs are not defined
         """
-        lower = params.time_cutoffs[1]
-        upper = params.time_cutoffs[0]
+        lower = 0
+        upper = params.g
         if not lower:
             lower = 0
         if not upper:
@@ -226,7 +226,7 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
             sizes[i] = self.cols.get_subpop_size(time=t)
         return sizes
 
-    def get_tc(self, demography):
+    def get_tc(self, demography, demographic_model, seq_length):
         """
         Build a pedigree table collection from the sample pedigree array
         """
@@ -243,12 +243,12 @@ class SamplePedigreeTable(pedigrees.PedigreeTable):
         node_time = np.repeat(self.cols.time, 2).astype(np.float64)
         pop_methods = {"three_pop": self.get_three_pop_ids,
                        "one_pop": self.get_one_pop_ids}
-        ind_pop = pop_methods[self.params.demographic_model]()
+        ind_pop = pop_methods[demographic_model]()
         node_pop = np.repeat(ind_pop, 2)
         node_ind = np.repeat(np.arange(n, dtype=np.int32), 2)
         ped_tc.nodes.append_columns(flags=node_flag, time=node_time,
                                     population=node_pop, individual=node_ind)
-        ped_tc = ped_tc.finalise(sequence_length=self.params.seq_length)
+        ped_tc = ped_tc.finalise(sequence_length=seq_length)
         return ped_tc
 
     def get_one_pop_demography(self):
@@ -432,7 +432,7 @@ class MultiWindow:
         self.sample_sets = self.get_sample_sets(sample_pedigree)
         self.genotype_sample_sets = self.get_genotype_sample_sets(
             sample_pedigree)
-        tc = sample_pedigree.get_tc(self.demography)
+        tc = sample_pedigree.get_tc(self.demography, demog, seq_length)
         self.run(tc)
         self.window_kb = self.seq_length / 1000
         self.total_Mb = self.window_kb * self.n_windows / 1000
