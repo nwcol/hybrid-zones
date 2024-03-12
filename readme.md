@@ -1,24 +1,15 @@
 ### Note
-
-I worked on this project during the 2022-2023 academic year as an undergraduate researcher.
-I am no longer actively working on it, but would be happy to answer any questions about it. 
-
+I worked on this project during the 2022-2023 academic year as an undergraduate researcher. It is no longer under active development, but please feel free to contact me or open issues if you find that anything is obscure or incorrect in function.
 
 ### Introduction
+"Hybzones" is a model I wrote in Python to study the structure of genetic variation in biological hybrid zones. It explicitly simulates the behavior of organisms under assortative mating regimes in a continuous 1-dimensional space across discrete generations to generate large, biologically plausible pedigrees, which can be transformed into `msprime` pedigree table collections for use in coalescent simulation. This allows the estimation of a variety of genetic parameters through space.
 
-"Hybzones" is a model I wrote to study the structure of genetic variation in biological hybrid zones. 
-It explicitly simulates the behavior of organisms under assortative mating regimes
-in a continuous 1-dimensional space 
-across discrete generations to generate large, biologically plausible pedigrees, which
-can be transformed into `msprime` pedigrees for coalescent simulation. 
+The model is focused on ecological interactions across a frontier or cline between interbreeding taxa, and follows in many respects the model of Payne and Krakauer (Sexual Selection, Space, and Speciation, International Journal of Organic Evolution 51:1 1997). Organisms, which are sexed and diploid, possess two fully penetrant, unlinked biallelic loci 'A' and 'B' which determine, respectively, a mating signal and mating preference phenotype. Under the various models of assortative mating, females with genotype B_x/B_x generally sample mates with signal genotype A_x/A_x with higher probability than they do A_x/A_y or A_y/A_y. The default initial state distributes homozygous organisms with matching signal/preference allele on each side of the space, such that the population usually develops as a pair of flanking homogeneous subpopulations centered around a dynamic hybrid zone.
 
-There are various models of assortative mate selection and spatially variant fitness 
-to allow the simulation of various biological scenarios. 
-
+There are several models of spatially variable fitness and assortative mate selection, which moduleate the strength of assortation and the behavior of heterozygotes, to allow the simulation of various biological scenarios. More information about models and model parameters can be found in docs/parameters.md.
 
 ### Setup
-
-I like using virtual environments managed with pip:
+I suggest setting up a Python virtual environment. I use pip as a package manager.
 
     git clone https://github.com/nwcol/hybzones.git
     python -m venv .venv
@@ -34,9 +25,7 @@ Then install `hybzones` from the cloned directory.
  
 
 ### Examples
-
-Running a simulation is simple. Let's initialize and run a 100-generation trial 
-with the default parameters. The `n_snaps` argument will print a figure with 10 plots displaying genotype densities across space at 10 even intervals in time.
+Running a simulation is simple. Let's initialize and run a 100-generation trial with the default parameters. The `n_snaps` argument will print a figure with 10 plots displaying genotype densities across space at 10 even intervals in time.
 
 	from hybzones import parameters, pedigrees
 	params = parameters.Params(g=100)
@@ -64,8 +53,7 @@ This will also save a .dat file recording associated parameters. There are two a
 	genotype_arr = arrays.GenotypeArr.from_pedigree(pedigree_table)
 	allele_arr = arrays.AlleleArr.from_pedigree(pedigree_table)
 
-We can sample lineages from within pedigrees by instantiating a `SamplePedigreeTable`. This pedigree will record only a subset of the most recent generation, sampled through a given sampling configuration, and their ancestors.
-The `bin_edges` array specifies the spatial bins that we sample from, and `sample_size` specifies the number of organisms to sample per bin. A list or array of integers with length `len(bin_edges) - 1` may also be provided.
+We can sample lineages from within pedigrees by instantiating a `SamplePedigreeTable`. This pedigree will record only a subset of the most recent generation, sampled through a given sampling configuration, and their ancestors. The `bin_edges` array specifies the spatial bins that we sample from, and `sample_size` specifies the number of organisms to sample per bin. A list or array of integers with length `len(bin_edges) - 1` may also be provided.
 
 	import numpy as np
 	from hybzones import genetics
@@ -86,34 +74,23 @@ Or acess the whole array of mean diversities across windows with
 
     windows.pi
 
-	
-
-
 ### Data structure
-
 The data structure was inspired by the tskit Tables class and its subclasses. It was also designed to minimize memory utilization, as pedigree tables can become very large when simulations endure for thousands of generations.
 
 #### Params class
-
 The `Params` class holds the parameters which define the duration of the simulation, the mating and dispersal models, and all other user-changeable simulation parameters. Further information is provided in the docs directory.
 
 #### Columns class
-
 The `Columns` class provides the basic structure of pedigree-like objects, including pedigree tables and generation tables. It is composed of several long vectors of equal length, which act as columns in a table. The `sex` column is `np.uint8`,  position `x` has type `np.float32`, and organism ids are `np.int64`. The number of columns included in a `Columns` instance is dynamic, but 4 column categories are mandatory since they are required to reconstruct ancestries: `id`, `maternal_id`, `paternal_id` and `time`. 
 
 #### Table class
-
 The `Table` class is the superclass of the `PedigreeTable` and `GenerationTable` classes and acts as a wrapper for a single `Columns` class. Arbitrary slices of `GenerationTable` and `PedigreeTable` instances are returned as `Table` instances.
 
 #### GenerationTable class
-
 The `GenerationTable` class is the structure which is actively manipulated throughout the process of simulation. It represents a single generation, usually of still-living organisms. 
 
 #### PedigreeTable class
-
 The `PedigreeTable` class holds complete pedigrees, recording the characteristics of all the organisms that existed throughout the course of a simulation. 
 
 #### Trial class
-
 A `Trial` class instance has a `PedigreeTable` instance as an attribute, and upon initiation immediately executes the simulation loop to fill the pedigree. 
-
