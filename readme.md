@@ -1,31 +1,27 @@
-### Note
-I worked on this project during the 2022-2023 academic year as an undergraduate researcher. It is no longer under active development, but please feel free to contact me or open issues if you find that anything is obscure or incorrect in function.
-
 ### Introduction
-"Hybzones" is a model I wrote in Python to study the structure of genetic variation in biological hybrid zones. It explicitly simulates the behavior of organisms under assortative mating regimes in a continuous 1-dimensional space across discrete generations to generate large, biologically plausible pedigrees, which can be transformed into `msprime` pedigree table collections for use in coalescent simulation. This allows the estimation of the distribution of variety of genetic parameters through space under various population models.
+`hybzones` is a python package implementing a spatial, individual-based stochastic model of a biological hybrid (tension) zone derived from Payne and Krakauer (Sexual Selection, Space, and Speciation, International Journal of Organic Evolution 51:1 1997).
+The biological situation simulated is the reestablishment of contact between two allopatric populations and the formation of a cline or tension zone with dynamics determined by the mode of sexual selection. 
+The simulation engine handles the dispersal of organisms in one-dimensional space, their mate choice according to a model of sexual selection (assortative mating) and reproduction, and a spatial fitness gradient.
+Sexual selection is modelled with two traits, a sexual signal/display and a signal-preference, each determined by one fully-penetrant locus. 
+Loci are biallelic (with one allele corresponding to each initially-allopatric population), unlinked and autosomal.
+Females mate preferentially with males expressing a signal phenotype that corresponds to their own preference. 
+Males are polygynous while females mate singly, producing a Poisson-distributed number of offspring with a mean inversely proportional to the local population density.
+There are several models of the distribution of mate choice probabilities- likewise with the preferences and signals expressed by heterozygotes.
+The distribution of male disperals is a function of predicted mating success, and a fitness gradient acting on the signal phenotype can be also modeled.
 
-The model is focused on ecological interactions across a frontier or cline between interbreeding taxa, and follows in many respects that of Payne and Krakauer (Sexual Selection, Space, and Speciation, International Journal of Organic Evolution 51:1 1997). Organisms, which are sexed and diploid, possess two fully penetrant, unlinked biallelic loci 'A' and 'B' which determine, respectively, a mating signal and mating preference phenotype. Under the various models of assortative mating, females with genotype Bˣ/Bˣ sample mates with signal genotype Aˣ/Aˣ with higher probability than they do Aˣ/Aʸ or Aʸ/Aʸ. The default initial state distributes homozygous organisms with matching signals and preferences on each side of the space, such that the population tends to develop as a pair of flanking homogeneous subpopulations centered around a dynamic hybrid zone.
-
-There are several models of spatially variable fitness and assortative mate selection, which moduleate the strength of assortation and the behavior of heterozygotes, to allow the simulation of various biological scenarios. More information about models and model parameters can be found in `docs/parameters.md`.
+`hybzones` uses simulation to generate pedigrees which are can be loaded as `msprime` pedigree table collections. 
+These can be used in turn to run coalescent simulations, from which we learn about the expected patterns of genetic diversity established under various models and model parameters. Information about models/parameters can be found in `docs/parameters.md`.
 
 ### Setup
-I suggest setting up a Python virtual environment. I use pip as a package manager.
+To install, clone this repository and install `hybzones` from the cloned directory with pip:
 
     git clone https://github.com/nwcol/hybzones.git
     python -m venv .venv
     source .venv/bin/activate
-
-You can install the required packages using
-
-    pip install -r hybzones/requirements.txt
-
-Then install `hybzones` from the cloned directory. 
-
     pip install hybzones/
- 
 
 ### Examples
-Running a simulation is simple. Let's initialize and run a 100-generation trial with the default parameters. The `n_snaps` argument will print a figure with 10 plots displaying genotype densities across space at 10 even intervals in time.
+Running a simulation is simple. Here we initialize and run a 100-generation trial with the default parameters. The `n_snaps` argument will print a figure with 10 plots displaying genotype densities across space at 10 even intervals in time.
 
 	from hybzones import parameters, pedigrees
 	params = parameters.Params(g=100)
